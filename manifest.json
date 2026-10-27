@@ -33,6 +33,14 @@
       "description": "苹果CMS通用聚合播放源：多站可配、自动翻页、片名归一化匹配",
       "author": "HYJ1817",
       "url": "https://raw.githubusercontent.com/HYJ1817/fw-modules/main/widgets/maccms-source.js"
+    },
+    {
+      "id": "app.mi3s.k4sources",
+      "title": "4K 聚合源",
+      "version": "1.0.0",
+      "description": "100 个苹果CMS影视源多源聚合：优先4K/蓝光线路，含综合高清源与成人源，点进即出真实 m3u8 播放地址",
+      "author": "mi3s",
+      "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/4k-sources.js"
     }
   ]
 }
