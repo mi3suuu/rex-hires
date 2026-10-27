@@ -1,33 +1,33 @@
 // ============================================================================
-// Rex 首页聚合模块 · 高清片源（app.mi3s.homes）
+// Rex 首页片单模块 · 高清片源（app.mi3s.homes）
 // ----------------------------------------------------------------------------
-// video 类型模块：在 Rex「首页推荐源」提供聚合片单与分类浏览。
+// video 类型模块：首页「片单」走 TMDB 片库，返回 type:"tmdb" 条目（官方规范）。
 //
-// 严格对齐 Rex 官方 video 模块（rex.tmdb / rex.bangumi）的写法与官方类型定义
-// （@rexnow/libs env.d.ts）：
+// 为什么走 TMDB 片库而不是直接聚合 CMS 源：
+//   Rex 首页视频列表只把 type:"tmdb"（或 douban/imdb）条目渲染成「片」（海报卡片），
+//   type:"url" 会被当成「源/链接」，海报墙渲染不出 → 显示「暂无」。
+//   CMS 源片名没有 tmdb id，逐条去 TMDB 搜索匹配的命中率低、又慢，不可靠。
+//   故参照官方 rex.bangumi 与 RexHome 的「TMDB 片库模式」：片单直接来自 TMDB
+//   discover/trending 接口，100% 有海报、详情、评分。
+//
+// 播放链路：点进条目后，Rex 把条目的 title（片名）传给 stream 模块
+//   （app.mi3s.hires 的 loadResource），由它去 28 个 CMS 源搜真实播放地址。
+//   即「首页 = TMDB 片库（展示），播放 = CMS 源（回源）」。
+//
+// 严格对齐官方类型（@rexnow/libs env.d.ts）与写法：
 //   - modules[] 不写 type 字段（缺省即 video 类型）
 //   - function 返回 VideoItem[]：{id, type:"tmdb", title, posterPath, backdropPath,
 //     releaseDate, rating, mediaType, genreTitle, description}
-//   - 只用 Widget.http.get（Rex 运行时提供），绝不用 fetch / setTimeout / .finally / new Promise
-//   - 超时用 Widget.http 的 timeout 选项；并发用 Promise.all
-//
-// 点进条目后，Rex 会把条目的 title（片名）作为 params.title 传给 stream 模块
-// （app.mi3s.hires 的 loadResource），由它去 28 个 CMS 源搜真实播放地址。
-//
-// 分类策略（参照 LibreTV 的二开实现 + 逐源探测结果）：
-//   主流影视源（非凡/光速/量子/巨量/虎牙/360/爱奇艺/暴风/bycj）有标准苹果CMS
-//   两级分类树（?ac=list 返回 class 数组，type_pid=0 一级、≠0 二级题材）。
-//   这里把「一级分类 → 各源 type_id」硬编码成映射表（逐源探测得到），
-//   二级题材按「题材名 → 各源 type_id」同样硬编码，跨源统一成标准题材。
+//   - 只用 Widget.tmdb.get(api, {params})（Rex 运行时提供），无 fetch/定时器
 // ============================================================================
 
 WidgetMetadata = {
   id: "app.mi3s.homes",
   title: "高清片源聚合",
-  description: "聚合 28 个 CMS 源的首页片单：最新更新、热播榜、电影/连续剧/综艺/动漫分类及二级题材，点进即出播放地址",
+  description: "首页片单走 TMDB 片库（最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材），点进即调高清片源(stream)回 CMS 源解析播放地址",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.0.1",
+  version: "2.0.0",
   requiredVersion: "0.0.1",
   detailCacheDuration: 60,
   modules: [
@@ -35,7 +35,7 @@ WidgetMetadata = {
       id: "latest",
       title: "最新更新",
       functionName: "latest",
-      description: "28 个 CMS 源最新更新片单聚合，按更新时间倒序去重",
+      description: "电影 + 剧集按首映/首播日期倒序的最新片单",
       cacheDuration: 300,
       params: [
         { name: "page", title: "页码", type: "page" },
@@ -45,7 +45,7 @@ WidgetMetadata = {
       id: "hot",
       title: "热播榜",
       functionName: "hot",
-      description: "按播放热度聚合的片单",
+      description: "本周趋势热播（电影 + 剧集）",
       cacheDuration: 600,
       params: [
         { name: "page", title: "页码", type: "page" },
@@ -55,7 +55,7 @@ WidgetMetadata = {
       id: "category",
       title: "分类",
       functionName: "category",
-      description: "电影 / 连续剧 / 综艺 / 动漫 / 短剧 / 纪录片 六大分类，跨源聚合",
+      description: "电影 / 连续剧 / 动漫 / 综艺 / 纪录片 / 短剧 六大分类",
       cacheDuration: 300,
       params: [
         {
@@ -65,10 +65,10 @@ WidgetMetadata = {
           enumOptions: [
             { title: "电影", value: "movie" },
             { title: "连续剧", value: "series" },
-            { title: "综艺", value: "variety" },
             { title: "动漫", value: "anime" },
-            { title: "短剧", value: "short" },
+            { title: "综艺", value: "variety" },
             { title: "纪录片", value: "documentary" },
+            { title: "短剧", value: "short" },
           ],
         },
         { name: "page", title: "页码", type: "page" },
@@ -78,7 +78,7 @@ WidgetMetadata = {
       id: "genre",
       title: "题材",
       functionName: "genre",
-      description: "二级题材：动作 / 喜剧 / 爱情 / 科幻 / 恐怖 / 剧情 / 战争 / 伦理 / 地区剧集等",
+      description: "二级题材：动作 / 喜剧 / 爱情 / 科幻 / 恐怖 / 剧情 / 战争 / 犯罪 / 悬疑 / 合家欢 / 冒险 / 奇幻 / 历史 / 音乐",
       cacheDuration: 300,
       params: [
         {
@@ -86,21 +86,20 @@ WidgetMetadata = {
           title: "题材",
           type: "enumeration",
           enumOptions: [
-            { title: "动作片", value: "action" },
-            { title: "喜剧片", value: "comedy" },
-            { title: "爱情片", value: "romance" },
-            { title: "科幻片", value: "scifi" },
-            { title: "恐怖片", value: "horror" },
-            { title: "剧情片", value: "drama" },
-            { title: "战争片", value: "war" },
-            { title: "伦理片", value: "ethics" },
-            { title: "国产剧", value: "cn_drama" },
-            { title: "港台剧", value: "hk_tw_drama" },
-            { title: "日韩剧", value: "jp_kr_drama" },
-            { title: "欧美剧", value: "us_eu_drama" },
-            { title: "国产动漫", value: "cn_anime" },
-            { title: "日韩动漫", value: "jp_kr_anime" },
-            { title: "欧美动漫", value: "us_eu_anime" },
+            { title: "动作", value: "action" },
+            { title: "喜剧", value: "comedy" },
+            { title: "爱情", value: "romance" },
+            { title: "科幻", value: "scifi" },
+            { title: "恐怖", value: "horror" },
+            { title: "剧情", value: "drama" },
+            { title: "战争", value: "war" },
+            { title: "犯罪", value: "crime" },
+            { title: "悬疑", value: "mystery" },
+            { title: "合家欢", value: "family" },
+            { title: "冒险", value: "adventure" },
+            { title: "奇幻", value: "fantasy" },
+            { title: "历史", value: "history" },
+            { title: "音乐", value: "music" },
           ],
         },
         { name: "page", title: "页码", type: "page" },
@@ -110,158 +109,87 @@ WidgetMetadata = {
 };
 
 // ---------------------------------------------------------------------------
-// 工具
+// TMDB 片库取数：直接调 TMDB 标准接口，返回 type:"tmdb" 条目（100% 能显示成「片」）
+// 参照官方 rex.bangumi 的 fetchData / applySortBy / discover 写法。
+// 首页 video 列表必须返回 type:"tmdb" 条目——type:"url" 会被 Rex 当成「源/链接」，
+// 海报墙渲染不出，表现为「暂无」。播放由 stream 模块（app.mi3s.hires）按片名回源解析。
 // ---------------------------------------------------------------------------
-function dsText(value) { return value == null ? "" : String(value).trim(); }
 
-function clean(value) {
-  return dsText(value).replace(/[\u200b\u200c\u200d\ufeff]/g, "").replace(/\s+/g, " ").trim();
-}
+// genre_id → 中文名（常用题材）
+var GENRE_NAMES = {
+  "28": "动作", "12": "冒险", "16": "动画", "35": "喜剧", "80": "犯罪",
+  "99": "纪录", "18": "剧情", "10751": "合家欢", "14": "奇幻", "36": "历史",
+  "27": "恐怖", "10402": "音乐", "9648": "悬疑", "10749": "爱情", "878": "科幻",
+  "10770": "电视电影", "53": "惊悚", "10752": "战争", "37": "西部",
+  "10759": "动作冒险", "10762": "儿童", "10763": "新闻", "10764": "真人秀",
+  "10765": "科幻奇幻", "10766": "肥皂剧", "10767": "脱口秀", "10768": "战争政治",
+  "35": "喜剧",
+};
 
-var DEFAULT_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1";
-
-// 手动拼查询串
-function buildUrl(base, query) {
-  var pairs = [];
-  for (var key in query) {
-    if (!Object.prototype.hasOwnProperty.call(query, key)) continue;
-    var value = query[key];
-    if (value === undefined || value === null || value === "") continue;
-    pairs.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(value)));
+function genreTitleOf(genreIds) {
+  if (!genreIds || !genreIds.length) return "";
+  var names = [];
+  for (var i = 0; i < genreIds.length; i++) {
+    var n = GENRE_NAMES[String(genreIds[i])];
+    if (n && names.indexOf(n) < 0) names.push(n);
   }
-  if (!pairs.length) return base;
-  return base + (base.indexOf("?") >= 0 ? "&" : "?") + pairs.join("&");
+  return names.slice(0, 3).join("/");
 }
 
-// 解析 Widget.http 返回（data 可能是字符串或对象）
-function unwrap(response) {
-  if (!response) return null;
-  var data = response.data !== undefined ? response.data : response;
-  if (typeof data === "string") {
-    var text = data.trim();
-    if (!text) return null;
-    try { return JSON.parse(text); } catch (e) { return null; }
+// 排序字段归一：movie 用 primary_release_date，tv 用 first_air_date
+function applySortBy(params, type) {
+  if (!params.sort_by || params.sort_by === "default") {
+    delete params.sort_by;
+    return;
   }
-  return data || null;
+  var dateField = type === "movie" ? "primary_release_date" : "first_air_date";
+  if (params.sort_by === "release_date.desc") params.sort_by = dateField + ".desc";
+  else if (params.sort_by === "release_date.asc") params.sort_by = dateField + ".asc";
 }
 
-async function httpGet(url) {
-  var response = await Widget.http.get(url, {
-    headers: { "User-Agent": DEFAULT_UA, "Accept": "application/json,text/plain,*/*" },
-    timeout: 4000,
-  });
-  return response;
-}
-
-// ---------------------------------------------------------------------------
-// 源清单
-// ---------------------------------------------------------------------------
-// 主流影视源（有分类树，参与「分类/题材」维度）
-// typeIds：一级分类的 type_id（逐源探测）
-var CMS_SOURCES = [
-  { name: "非凡资源",  url: "https://cj.ffzyapi.com/api.php/provide/vod",   typeIds: { movie: "1", series: "2", variety: "3", anime: "4" }, genres: { action: "6", comedy: "7", romance: "8", scifi: "9", horror: "10", drama: "11", war: "12", ethics: "34", cn_drama: "13", hk_tw_drama: "14", jp_kr_drama: "15", us_eu_drama: "16", cn_anime: "29", jp_kr_anime: "30", us_eu_anime: "31" } },
-  { name: "非凡资源②", url: "https://api.ffzyapi.com/api.php/provide/vod",  typeIds: { movie: "1", series: "2", variety: "3", anime: "4" }, genres: { action: "6", comedy: "7", romance: "8", scifi: "9", horror: "10", drama: "11", war: "12", ethics: "34", cn_drama: "13", hk_tw_drama: "14", jp_kr_drama: "15", us_eu_drama: "16", cn_anime: "29", jp_kr_anime: "30", us_eu_anime: "31" } },
-  { name: "非凡影视",  url: "https://ffzy5.tv/api.php/provide/vod",         typeIds: { movie: "1", series: "2", variety: "3", anime: "4" }, genres: { action: "6", comedy: "7", romance: "8", scifi: "9", horror: "10", drama: "11", war: "12", ethics: "34", cn_drama: "13", hk_tw_drama: "14", jp_kr_drama: "15", us_eu_drama: "16", cn_anime: "29", jp_kr_anime: "30", us_eu_anime: "31" } },
-  { name: "光速资源",  url: "https://api.guangsuapi.com/api.php/provide/vod", typeIds: { movie: "1", series: "2", variety: "3", anime: "4", short: "31", documentary: "24" } },
-  { name: "量子资源",  url: "https://cj.lziapi.com/api.php/provide/vod",    typeIds: { movie: "1", series: "2", variety: "3", anime: "4", short: "46" } },
-  { name: "巨量资源",  url: "https://api.juliang.live/api/provide/vod",     typeIds: { movie: "1", series: "2", variety: "4", anime: "3", short: "5" } },
-  { name: "虎牙资源",  url: "https://www.huyaapi.com/api.php/provide/vod",  typeIds: { movie: "2", series: "1", variety: "27", anime: "17", short: "30" } },
-  { name: "360资源",   url: "https://360zy.com/api.php/provide/vod",        typeIds: { movie: "1", series: "2", variety: "3", anime: "4", short: "46" } },
-  { name: "爱奇艺资源", url: "https://iqiyizyapi.com/api.php/provide/vod",  typeIds: { movie: "7", series: "8", variety: "9", anime: "40" } },
-  { name: "暴风资源",  url: "https://bf.xoxowin86cisyap.com/api.php/provide/vod", typeIds: { movie: "20", series: "30", variety: "45", anime: "39", short: "58" } },
-  { name: "bycj资源",  url: "https://bycj.rytvapi.com/api.php/provide/vod", typeIds: { movie: "1", series: "2", variety: "3", anime: "4" } },
-  // 扁平分类源（无两级树，但一级分类齐全，参与「分类」维度；题材走不到）
-  { name: "无尽资源",  url: "https://api.wujinapi.com/api.php/provide/vod", typeIds: { movie: "1", series: "2", variety: "3", anime: "4", short: "41", documentary: "21" }, genres: { action: "6", comedy: "7", romance: "8", scifi: "9", horror: "10", drama: "11", war: "12", ethics: "20", cn_drama: "13", hk_tw_drama: "14", jp_kr_drama: "22", us_eu_drama: "16", cn_anime: "29", jp_kr_anime: "30", us_eu_anime: "31" } },
-  { name: "红牛资源",  url: "https://www.hongniuzy3.com/api.php/provide/vod", typeIds: { movie: "1", series: "2", variety: "3", anime: "4" }, genres: { action: "6", comedy: "7", romance: "8", scifi: "9", horror: "10", drama: "11", war: "12", ethics: "34", cn_drama: "13", hk_tw_drama: "14", jp_kr_drama: "15", us_eu_drama: "16", cn_anime: "29", jp_kr_anime: "30", us_eu_anime: "31" } },
-  { name: "最大资源",  url: "https://api.zuidapi.com/api.php/provide/vod",   typeIds: { movie: "1", series: "2", variety: "3", anime: "4" }, genres: { action: "6", comedy: "7", romance: "8", scifi: "9", horror: "10", drama: "11", war: "12", ethics: "34", cn_drama: "13", hk_tw_drama: "14", jp_kr_drama: "15", us_eu_drama: "16", cn_anime: "29", jp_kr_anime: "30", us_eu_anime: "31" } },
-  { name: "百度资源",  url: "https://api.apibdzy.com/api.php/provide/vod",  typeIds: { movie: "1", series: "2", variety: "3", anime: "4" }, genres: { action: "6", comedy: "7", romance: "8", scifi: "9", horror: "10", drama: "11", war: "12", ethics: "34", cn_drama: "13", hk_tw_drama: "14", jp_kr_drama: "15", us_eu_drama: "16", cn_anime: "29", jp_kr_anime: "30", us_eu_anime: "31" } },
-];
-
-// 仅参与「最新/热播」聚合、无分类树或不进分类维度的源
-var EXTRA_SOURCES = [
-  { name: "非凡资源③", url: "https://ffzy.tv/api.php/provide/vod" },
-  { name: "非凡资源④", url: "https://ffzy1.tv/api.php/provide/vod" },
-  { name: "滴滴资源",   url: "https://api.ddapi.cc/api.php/provide/vod" },
-  { name: "大地资源",   url: "https://dadiapi.com/api.php/provide/vod/at/json" },
-  { name: "森林资源",   url: "https://beiyong.slapibf.com/api.php/provide/vod" },
-  { name: "乐播资源",   url: "https://lbapi9.com/api.php/provide/vod" },
-  { name: "辣椒资源",   url: "https://apilj.com/api.php/provide/vod" },
-  { name: "麻豆资源",   url: "https://91md.me/api.php/provide/vod" },
-  { name: "madouse",    url: "https://madouse.la/api.php/provide/vod" },
-];
-
-// 全部源（聚合用）
-var ALL_SOURCES = CMS_SOURCES.concat(EXTRA_SOURCES);
-
-// 「最新更新/热播榜」首页聚合只取「快速源」——实测 <1.2s 的前 10 个源。
-// 全量 24 源串行要 40s+，远超首页模块加载超时，是之前首页显示 empty 的直接原因。
-// 快速源 10 个 × 受控并发(5/批) ≈ 2 批 ≈ <3s，稳定且够快。
-var FAST_INDEX = [2, 0, 1, 12, 14, 6, 15, 16, 13, 11]; // 非凡影视/非凡/非凡②/红牛/最大/虎牙/百度/非凡③/非凡④/无尽
-var FAST_SOURCES = FAST_INDEX.map(function (i) { return ALL_SOURCES[i]; });
-
-// ---------------------------------------------------------------------------
-// 片单条目转换：CMS vod → Rex VideoItem
-// ---------------------------------------------------------------------------
-function mediaTypeOf(typeId) {
-  // 按 type_id 归属判定媒体类型（电影/连续剧/综艺/动漫 → movie/tv）
-  return "movie";
-}
-
-function toVideoItem(vod, src) {
-  var name = clean(vod.vod_name);
-  if (!name) return null;
-  var year = clean(vod.vod_year);
-  var pic = clean(vod.vod_pic);
-  var remarks = clean(vod.vod_remarks);
-  var typeName = clean(vod.type_name);
-  var vid = String(vod.vod_id || "");
-  // mediaType：标题含「第..集/季」或分类是连续剧类则 tv，否则 movie
-  var mediaType = /(?:第\d+集|第\d+話|S\d+)/i.test(name) || /剧/.test(typeName) ? "tv" : "movie";
-  // type 用 "url"（自定义条目），避免 Rex 用假 tmdb id 去查内置 TMDB 详情导致条目被丢弃。
-  // 权威规范（@rexnow/libs env.d.ts + ForwardWidgets README）：
-  //   type="url" 时 id 必须是「对应 url」；link 是「详情页打开地址」。
-  //   这里让 id 与 link 保持一致（都指向可回源取详情的地址），loadDetail 据此回源。
-  var srcUrl = src && src.url ? src.url : "";
-  var detailUrl = srcUrl + "###" + vid;
-  return {
-    id: detailUrl,
-    type: "url",
-    title: name,
-    description: remarks || "",
-    releaseDate: year || "",
-    posterPath: pic,
-    backdropPath: pic,
-    coverUrl: pic,
-    rating: clean(vod.vod_score) || "",
-    mediaType: mediaType,
-    genreTitle: typeName,
-    link: detailUrl,
-    // 内部字段：hot 排序用，最终返回前 stripInternal 去除
-    _hits: parseInt(vod.vod_hits, 10) || 0,
-    _src: srcUrl,
-  };
-}
-
-// 去掉内部字段
-function stripInternal(items) {
-  return items.map(function (it) {
-    var copy = {};
-    for (var k in it) {
-      if (k === "_hits" || k === "_src") continue;
-      copy[k] = it[k];
+// 调 TMDB 接口并把 results 转成 type:"tmdb" 条目（参照 bangumi.fetchData）
+async function tmdbFetch(api, params, forceMediaType) {
+  var response;
+  try {
+    response = await Widget.tmdb.get(api, { params: params || {} });
+  } catch (e) {
+    return [];
+  }
+  var data = (response && response.results) || [];
+  if (!Array.isArray(data)) return [];
+  var out = [];
+  for (var i = 0; i < data.length; i++) {
+    var item = data[i];
+    var mediaType = forceMediaType;
+    if (!mediaType) {
+      mediaType = item.media_type;
+      if (mediaType == null) mediaType = item.title ? "movie" : "tv";
     }
-    return copy;
-  });
+    if (mediaType !== "movie" && mediaType !== "tv") continue;
+    out.push({
+      id: item.id,
+      type: "tmdb",
+      title: item.title || item.name,
+      description: item.overview,
+      releaseDate: item.release_date || item.first_air_date || "",
+      backdropPath: item.backdrop_path,
+      posterPath: item.poster_path,
+      rating: item.vote_average,
+      mediaType: mediaType,
+      genreTitle: genreTitleOf(item.genre_ids),
+    });
+  }
+  return out;
 }
 
-// 去重 + 排序
-function dedupe(items) {
+// 按 tmdb id 去重（movie 与 tv 合并后可能撞 id 的极少数情况）
+function dedupeById(items) {
   var seen = {};
   var out = [];
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
-    if (!it || !it.title) continue;
-    var key = it.title;
+    if (!it || it.id == null) continue;
+    var key = it.mediaType + ":" + it.id;
     if (seen[key]) continue;
     seen[key] = true;
     out.push(it);
@@ -269,183 +197,94 @@ function dedupe(items) {
   return out;
 }
 
-function sortByTime(items) {
-  // 尽量按 releaseDate 倒序，缺失的排后面（无可靠时间戳时保持抓取顺序）
-  return items.sort(function (a, b) {
-    var ya = parseInt(a.releaseDate, 10) || 0;
-    var yb = parseInt(b.releaseDate, 10) || 0;
-    return yb - ya;
-  });
-}
-
 // ---------------------------------------------------------------------------
-// 取数：单源列表页
-// ---------------------------------------------------------------------------
-async function loadSourceList(src, query) {
-  var url = buildUrl(src.url, query);
-  var payload;
-  try {
-    var resp = await httpGet(url);
-    payload = unwrap(resp);
-  } catch (e) {
-    console.log("FW_HOMES err " + src.name + ": " + (e && e.message ? e.message : e));
-    return [];
-  }
-  var list = (payload && payload.list) || [];
-  if (!Array.isArray(list)) {
-    console.log("FW_HOMES nolist " + src.name + " payload=" + (payload ? JSON.stringify(payload).substring(0, 80) : "null"));
-    return [];
-  }
-  var items = [];
-  for (var i = 0; i < list.length; i++) {
-    var it = toVideoItem(list[i], src);
-    if (it) items.push(it);
-  }
-  console.log("FW_HOMES ok " + src.name + " -> " + items.length + " items");
-  return items;
-}
-
-// 受控并发抓多个源：分小批（每批 CONCURRENCY 个）并发，批间 await。
-// - 不用全量 Promise.all（20+ 并发易触发 Rex 沙盒 continuation 泄漏 → 整批被吞）；
-// - 也不用纯串行（24 源逐个 await 总耗时 40s+，远超首页模块加载超时）。
-// 分批并发在「稳定」与「快」之间取平衡：快速源 10 个、每批 5 个 ≈ 2 批 ≈ <3s。
-var CONCURRENCY = 5;
-
-async function loadMany(sources, makeQuery) {
-  var merged = [];
-  for (var i = 0; i < sources.length; i += CONCURRENCY) {
-    var batch = sources.slice(i, i + CONCURRENCY);
-    var tasks = batch.map(function (src) {
-      var query = makeQuery(src);
-      if (!query) return Promise.resolve([]);
-      return loadSourceList(src, query).catch(function () { return []; });
-    });
-    var groups = await Promise.all(tasks);
-    for (var j = 0; j < groups.length; j++) {
-      merged = merged.concat(groups[j]);
-    }
-  }
-  return merged;
-}
-
-// ---------------------------------------------------------------------------
-// 分页切片：每页 20 条
-// ---------------------------------------------------------------------------
-var PAGE_SIZE = 20;
-
-function paginate(items, page) {
-  var p = parseInt(page, 10) || 1;
-  if (p < 1) p = 1;
-  var start = (p - 1) * PAGE_SIZE;
-  return items.slice(start, start + PAGE_SIZE);
-}
-
-// ---------------------------------------------------------------------------
-// 入口 function
+// 入口 function：直接走 TMDB 片库（参照官方 rex.bangumi），返回 type:"tmdb" 条目
 // ---------------------------------------------------------------------------
 
-// 最新更新：快速源 ?ac=videolist&pg=1（跨源去重，按时间倒序）
+// 最新更新：电影 + 剧集按首映/首播日期倒序，合并去重
 async function latest(params) {
-  var page = params.page || 1;
-  var merged = await loadMany(FAST_SOURCES, function (src) {
-    return { ac: "videolist", pg: 1 };
-  });
-  var items = sortByTime(dedupe(merged));
-  return stripInternal(paginate(items, page));
+  var page = parseInt(params.page, 10) || 1;
+  var language = params.language || "zh-CN";
+  var movie = await tmdbFetch("discover/movie", {
+    sort_by: "primary_release_date.desc", page: page, language: language,
+    "vote_count.gte": 20, include_adult: false,
+  }, "movie");
+  var tv = await tmdbFetch("discover/tv", {
+    sort_by: "first_air_date.desc", page: page, language: language,
+    "vote_count.gte": 20, include_adult: false,
+  }, "tv");
+  return dedupeById(movie.concat(tv));
 }
 
-// 热播榜：快速源列表页按 vod_hits 倒序
+// 热播榜：本周趋势（电影+剧集）
 async function hot(params) {
-  var page = params.page || 1;
-  var merged = await loadMany(FAST_SOURCES, function (src) {
-    return { ac: "videolist", pg: 1 };
-  });
-  var items = dedupe(merged);
-  items.sort(function (a, b) { return b._hits - a._hits; });
-  return stripInternal(paginate(items, page));
+  var page = parseInt(params.page, 10) || 1;
+  var language = params.language || "zh-CN";
+  return await tmdbFetch("trending/all/week", {
+    page: page, language: language,
+  }, null);
 }
 
-// 分类：选一个一级分类，跨源取该分类 type_id 的列表
+// 分类：电影 / 连续剧 / 动漫 / 综艺 / 纪录片 / 短剧（映射到 TMDB 片库类型 + 题材）
 async function category(params) {
   var cat = params.type || "movie";
-  var page = params.page || 1;
-  var merged = await loadMany(CMS_SOURCES, function (src) {
-    var tid = src.typeIds && src.typeIds[cat];
-    if (!tid) return null;
-    return { ac: "videolist", t: tid, pg: 1 };
-  });
-  var items = sortByTime(dedupe(merged));
-  return stripInternal(paginate(items, page));
+  var page = parseInt(params.page, 10) || 1;
+  var language = params.language || "zh-CN";
+  // 分类 → TMDB 片库映射
+  if (cat === "movie") {
+    return await tmdbFetch("discover/movie", {
+      sort_by: "popularity.desc", page: page, language: language, include_adult: false,
+    }, "movie");
+  }
+  if (cat === "series") {
+    return await tmdbFetch("discover/tv", {
+      sort_by: "popularity.desc", page: page, language: language, include_adult: false,
+    }, "tv");
+  }
+  if (cat === "anime") {
+    return await tmdbFetch("discover/tv", {
+      sort_by: "popularity.desc", page: page, language: language,
+      with_genres: "16", include_adult: false,
+    }, "tv");
+  }
+  if (cat === "variety") {
+    return await tmdbFetch("discover/tv", {
+      sort_by: "popularity.desc", page: page, language: language,
+      with_genres: "10764", include_adult: false,
+    }, "tv");
+  }
+  if (cat === "documentary") {
+    return await tmdbFetch("discover/movie", {
+      sort_by: "popularity.desc", page: page, language: language,
+      with_genres: "99", include_adult: false,
+    }, "movie");
+  }
+  if (cat === "short") {
+    return await tmdbFetch("discover/movie", {
+      sort_by: "popularity.desc", page: page, language: language,
+      with_runtime_gte: "1", with_runtime_lte: "60", include_adult: false,
+    }, "movie");
+  }
+  return [];
 }
 
-// 题材：选一个二级题材，跨源取该题材 type_id 的列表
+// 题材：按 TMDB 题材（genre）筛选，可选电影/剧集
 async function genre(params) {
   var g = params.genre || "action";
-  var page = params.page || 1;
-  var merged = await loadMany(CMS_SOURCES, function (src) {
-    var gid = src.genres && src.genres[g];
-    if (!gid) return null;
-    return { ac: "videolist", t: gid, pg: 1 };
-  });
-  var items = sortByTime(dedupe(merged));
-  return stripInternal(paginate(items, page));
-}
-
-// ---------------------------------------------------------------------------
-// 详情：点进列表条目后，Rex 用条目的 link 调 loadDetail 补详情
-// link 格式：<源url>###<vod_id>
-// 去源详情接口 ?ac=detail&ids=vod_id 取详情，返回带简介/剧集/海报的条目；
-// 播放时 Rex 会自动调 stream 模块（app.mi3s.hires）的 loadResource 解析地址。
-// ---------------------------------------------------------------------------
-async function loadDetail(link) {
-  if (!link) return null;
-  var parts = String(link).split("###");
-  var srcUrl = parts[0];
-  var vid = parts[1];
-  if (!srcUrl || !vid) return null;
-
-  var detailUrl = buildUrl(srcUrl, { ac: "detail", ids: vid });
-  var payload;
-  try {
-    var resp = await httpGet(detailUrl);
-    payload = unwrap(resp);
-  } catch (e) {
-    return null;
-  }
-  var list = (payload && payload.list) || [];
-  if (!Array.isArray(list) || !list.length) return null;
-  var vod = list[0];
-
-  var name = clean(vod.vod_name);
-  if (!name) return null;
-
-  // 统计剧集数（从 vod_play_url 拆出「第N集」标题数量，仅用于展示 mediaType）
-  var playUrl = String(vod.vod_play_url || "");
-  var blocks = playUrl.split("$$$");
-  var firstBlock = blocks[0] || "";
-  var chunks = firstBlock.split("#");
-  var epCount = 0;
-  for (var i = 0; i < chunks.length; i++) {
-    var ep = chunks[i].split("$");
-    if (ep.length >= 2 && clean(ep[0]) && /^https?:\/\//i.test(clean(ep.slice(1).join("$")))) epCount++;
-  }
-
-  // 只返回详情展示数据，不放 videoUrl/episodeItems 的播放地址：
-  // 播放地址统一交给 stream 模块（app.mi3s.hires 的 loadResource）解析，
-  // 它能正确处理「中转页 → 真实 m3u8」与裸直链两种情况。
-  // 注意：id 与列表条目保持一致（同为 detailUrl），符合「loadList/loadDetail 同组 id/link/type」规范。
-  return {
-    id: link,
-    type: "url",
-    title: name,
-    description: clean(vod.vod_content) || clean(vod.vod_blurb) || clean(vod.vod_remarks) || "",
-    releaseDate: clean(vod.vod_year) || "",
-    posterPath: clean(vod.vod_pic),
-    backdropPath: clean(vod.vod_pic),
-    coverUrl: clean(vod.vod_pic),
-    rating: clean(vod.vod_score) || "",
-    mediaType: epCount > 1 ? "tv" : "movie",
-    genreTitle: clean(vod.type_name),
-    link: link,
+  var page = parseInt(params.page, 10) || 1;
+  var language = params.language || "zh-CN";
+  // 题材 → TMDB genre_id 映射
+  var GENRE_MAP = {
+    action: "28", comedy: "35", romance: "10749", scifi: "878", horror: "27",
+    drama: "18", war: "10752", ethics: "10749", crime: "80", mystery: "9648",
+    family: "10751", adventure: "12", fantasy: "14", history: "36", music: "10402",
   };
+  var gid = GENRE_MAP[g] || "28";
+  // 动漫/剧集类题材走 tv，其余默认 movie
+  var isTv = (g === "jp_kr_anime" || g === "cn_anime" || g === "us_eu_anime");
+  var type = isTv ? "tv" : "movie";
+  return await tmdbFetch("discover/" + type, {
+    sort_by: "popularity.desc", page: page, language: language,
+    with_genres: gid, include_adult: false,
+  }, type);
 }
