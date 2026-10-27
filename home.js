@@ -27,7 +27,7 @@ WidgetMetadata = {
   description: "聚合 28 个 CMS 源的首页片单：最新更新、热播榜、电影/连续剧/综艺/动漫分类及二级题材，点进即出播放地址",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.0.0",
+  version: "1.0.1",
   requiredVersion: "0.0.1",
   detailCacheDuration: 60,
   modules: [
@@ -147,8 +147,8 @@ function unwrap(response) {
 
 async function httpGet(url) {
   var response = await Widget.http.get(url, {
-    headers: { "User-Agent": DEFAULT_UA },
-    timeout: 5000,
+    headers: { "User-Agent": DEFAULT_UA, "Accept": "application/json,text/plain,*/*" },
+    timeout: 4000,
   });
   return response;
 }
@@ -193,6 +193,12 @@ var EXTRA_SOURCES = [
 // 全部源（聚合用）
 var ALL_SOURCES = CMS_SOURCES.concat(EXTRA_SOURCES);
 
+// 「最新更新/热播榜」首页聚合只取「快速源」——实测 <1.2s 的前 10 个源。
+// 全量 24 源串行要 40s+，远超首页模块加载超时，是之前首页显示 empty 的直接原因。
+// 快速源 10 个 × 受控并发(5/批) ≈ 2 批 ≈ <3s，稳定且够快。
+var FAST_INDEX = [2, 0, 1, 12, 14, 6, 15, 16, 13, 11]; // 非凡影视/非凡/非凡②/红牛/最大/虎牙/百度/非凡③/非凡④/无尽
+var FAST_SOURCES = FAST_INDEX.map(function (i) { return ALL_SOURCES[i]; });
+
 // ---------------------------------------------------------------------------
 // 片单条目转换：CMS vod → Rex VideoItem
 // ---------------------------------------------------------------------------
@@ -212,10 +218,13 @@ function toVideoItem(vod, src) {
   // mediaType：标题含「第..集/季」或分类是连续剧类则 tv，否则 movie
   var mediaType = /(?:第\d+集|第\d+話|S\d+)/i.test(name) || /剧/.test(typeName) ? "tv" : "movie";
   // type 用 "url"（自定义条目），避免 Rex 用假 tmdb id 去查内置 TMDB 详情导致条目被丢弃。
-  // link 编码「源url + vod_id」，loadDetail 据此回源取详情。
+  // 权威规范（@rexnow/libs env.d.ts + ForwardWidgets README）：
+  //   type="url" 时 id 必须是「对应 url」；link 是「详情页打开地址」。
+  //   这里让 id 与 link 保持一致（都指向可回源取详情的地址），loadDetail 据此回源。
   var srcUrl = src && src.url ? src.url : "";
+  var detailUrl = srcUrl + "###" + vid;
   return {
-    id: vid,
+    id: detailUrl,
     type: "url",
     title: name,
     description: remarks || "",
@@ -226,7 +235,7 @@ function toVideoItem(vod, src) {
     rating: clean(vod.vod_score) || "",
     mediaType: mediaType,
     genreTitle: typeName,
-    link: srcUrl + "###" + vid,
+    link: detailUrl,
     // 内部字段：hot 排序用，最终返回前 stripInternal 去除
     _hits: parseInt(vod.vod_hits, 10) || 0,
     _src: srcUrl,
@@ -279,29 +288,42 @@ async function loadSourceList(src, query) {
     var resp = await httpGet(url);
     payload = unwrap(resp);
   } catch (e) {
+    console.log("FW_HOMES err " + src.name + ": " + (e && e.message ? e.message : e));
     return [];
   }
   var list = (payload && payload.list) || [];
-  if (!Array.isArray(list)) return [];
+  if (!Array.isArray(list)) {
+    console.log("FW_HOMES nolist " + src.name + " payload=" + (payload ? JSON.stringify(payload).substring(0, 80) : "null"));
+    return [];
+  }
   var items = [];
   for (var i = 0; i < list.length; i++) {
     var it = toVideoItem(list[i], src);
     if (it) items.push(it);
   }
+  console.log("FW_HOMES ok " + src.name + " -> " + items.length + " items");
   return items;
 }
 
-// 并发抓多个源（Promise.all），每个源独立容错
+// 受控并发抓多个源：分小批（每批 CONCURRENCY 个）并发，批间 await。
+// - 不用全量 Promise.all（20+ 并发易触发 Rex 沙盒 continuation 泄漏 → 整批被吞）；
+// - 也不用纯串行（24 源逐个 await 总耗时 40s+，远超首页模块加载超时）。
+// 分批并发在「稳定」与「快」之间取平衡：快速源 10 个、每批 5 个 ≈ 2 批 ≈ <3s。
+var CONCURRENCY = 5;
+
 async function loadMany(sources, makeQuery) {
-  var tasks = sources.map(function (src) {
-    var query = makeQuery(src);
-    if (!query) return Promise.resolve([]);
-    return loadSourceList(src, query).catch(function () { return []; });
-  });
-  var groups = await Promise.all(tasks);
   var merged = [];
-  for (var i = 0; i < groups.length; i++) {
-    merged = merged.concat(groups[i]);
+  for (var i = 0; i < sources.length; i += CONCURRENCY) {
+    var batch = sources.slice(i, i + CONCURRENCY);
+    var tasks = batch.map(function (src) {
+      var query = makeQuery(src);
+      if (!query) return Promise.resolve([]);
+      return loadSourceList(src, query).catch(function () { return []; });
+    });
+    var groups = await Promise.all(tasks);
+    for (var j = 0; j < groups.length; j++) {
+      merged = merged.concat(groups[j]);
+    }
   }
   return merged;
 }
@@ -322,28 +344,22 @@ function paginate(items, page) {
 // 入口 function
 // ---------------------------------------------------------------------------
 
-// 最新更新：全部源 ?ac=videolist&pg=1（跨源去重，按时间倒序）
+// 最新更新：快速源 ?ac=videolist&pg=1（跨源去重，按时间倒序）
 async function latest(params) {
   var page = params.page || 1;
-  var tasks = ALL_SOURCES.map(function (src) {
-    return loadSourceList(src, { ac: "videolist", pg: 1 }).catch(function () { return []; });
+  var merged = await loadMany(FAST_SOURCES, function (src) {
+    return { ac: "videolist", pg: 1 };
   });
-  var groups = await Promise.all(tasks);
-  var merged = [];
-  for (var i = 0; i < groups.length; i++) merged = merged.concat(groups[i]);
   var items = sortByTime(dedupe(merged));
   return stripInternal(paginate(items, page));
 }
 
-// 热播榜：全部源列表页按 vod_hits 倒序
+// 热播榜：快速源列表页按 vod_hits 倒序
 async function hot(params) {
   var page = params.page || 1;
-  var tasks = ALL_SOURCES.map(function (src) {
-    return loadSourceList(src, { ac: "videolist", pg: 1 }).catch(function () { return []; });
+  var merged = await loadMany(FAST_SOURCES, function (src) {
+    return { ac: "videolist", pg: 1 };
   });
-  var groups = await Promise.all(tasks);
-  var merged = [];
-  for (var i = 0; i < groups.length; i++) merged = merged.concat(groups[i]);
   var items = dedupe(merged);
   items.sort(function (a, b) { return b._hits - a._hits; });
   return stripInternal(paginate(items, page));
@@ -353,14 +369,11 @@ async function hot(params) {
 async function category(params) {
   var cat = params.type || "movie";
   var page = params.page || 1;
-  var tasks = CMS_SOURCES.map(function (src) {
+  var merged = await loadMany(CMS_SOURCES, function (src) {
     var tid = src.typeIds && src.typeIds[cat];
-    if (!tid) return Promise.resolve([]);
-    return loadSourceList(src, { ac: "videolist", t: tid, pg: 1 }).catch(function () { return []; });
+    if (!tid) return null;
+    return { ac: "videolist", t: tid, pg: 1 };
   });
-  var groups = await Promise.all(tasks);
-  var merged = [];
-  for (var i = 0; i < groups.length; i++) merged = merged.concat(groups[i]);
   var items = sortByTime(dedupe(merged));
   return stripInternal(paginate(items, page));
 }
@@ -369,14 +382,11 @@ async function category(params) {
 async function genre(params) {
   var g = params.genre || "action";
   var page = params.page || 1;
-  var tasks = CMS_SOURCES.map(function (src) {
+  var merged = await loadMany(CMS_SOURCES, function (src) {
     var gid = src.genres && src.genres[g];
-    if (!gid) return Promise.resolve([]);
-    return loadSourceList(src, { ac: "videolist", t: gid, pg: 1 }).catch(function () { return []; });
+    if (!gid) return null;
+    return { ac: "videolist", t: gid, pg: 1 };
   });
-  var groups = await Promise.all(tasks);
-  var merged = [];
-  for (var i = 0; i < groups.length; i++) merged = merged.concat(groups[i]);
   var items = sortByTime(dedupe(merged));
   return stripInternal(paginate(items, page));
 }
@@ -423,8 +433,9 @@ async function loadDetail(link) {
   // 只返回详情展示数据，不放 videoUrl/episodeItems 的播放地址：
   // 播放地址统一交给 stream 模块（app.mi3s.hires 的 loadResource）解析，
   // 它能正确处理「中转页 → 真实 m3u8」与裸直链两种情况。
+  // 注意：id 与列表条目保持一致（同为 detailUrl），符合「loadList/loadDetail 同组 id/link/type」规范。
   return {
-    id: vid,
+    id: link,
     type: "url",
     title: name,
     description: clean(vod.vod_content) || clean(vod.vod_blurb) || clean(vod.vod_remarks) || "",
