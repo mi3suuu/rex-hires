@@ -201,28 +201,35 @@ function mediaTypeOf(typeId) {
   return "movie";
 }
 
-function toVideoItem(vod) {
+function toVideoItem(vod, src) {
   var name = clean(vod.vod_name);
   if (!name) return null;
   var year = clean(vod.vod_year);
   var pic = clean(vod.vod_pic);
   var remarks = clean(vod.vod_remarks);
   var typeName = clean(vod.type_name);
+  var vid = String(vod.vod_id || "");
   // mediaType：标题含「第..集/季」或分类是连续剧类则 tv，否则 movie
   var mediaType = /(?:第\d+集|第\d+話|S\d+)/i.test(name) || /剧/.test(typeName) ? "tv" : "movie";
+  // type 用 "url"（自定义条目），避免 Rex 用假 tmdb id 去查内置 TMDB 详情导致条目被丢弃。
+  // link 编码「源url + vod_id」，loadDetail 据此回源取详情。
+  var srcUrl = src && src.url ? src.url : "";
   return {
-    id: String(vod.vod_id || ""),
-    type: "tmdb",
+    id: vid,
+    type: "url",
     title: name,
     description: remarks || "",
     releaseDate: year || "",
     posterPath: pic,
     backdropPath: pic,
+    coverUrl: pic,
     rating: clean(vod.vod_score) || "",
     mediaType: mediaType,
     genreTitle: typeName,
-    // 内部排序用（不进最终返回，但在 paginate 前用于 hot 排序）
+    link: srcUrl + "###" + vid,
+    // 内部字段：hot 排序用，最终返回前 stripInternal 去除
     _hits: parseInt(vod.vod_hits, 10) || 0,
+    _src: srcUrl,
   };
 }
 
@@ -231,7 +238,7 @@ function stripInternal(items) {
   return items.map(function (it) {
     var copy = {};
     for (var k in it) {
-      if (k === "_hits") continue;
+      if (k === "_hits" || k === "_src") continue;
       copy[k] = it[k];
     }
     return copy;
@@ -278,7 +285,7 @@ async function loadSourceList(src, query) {
   if (!Array.isArray(list)) return [];
   var items = [];
   for (var i = 0; i < list.length; i++) {
-    var it = toVideoItem(list[i]);
+    var it = toVideoItem(list[i], src);
     if (it) items.push(it);
   }
   return items;
@@ -372,4 +379,62 @@ async function genre(params) {
   for (var i = 0; i < groups.length; i++) merged = merged.concat(groups[i]);
   var items = sortByTime(dedupe(merged));
   return stripInternal(paginate(items, page));
+}
+
+// ---------------------------------------------------------------------------
+// 详情：点进列表条目后，Rex 用条目的 link 调 loadDetail 补详情
+// link 格式：<源url>###<vod_id>
+// 去源详情接口 ?ac=detail&ids=vod_id 取详情，返回带简介/剧集/海报的条目；
+// 播放时 Rex 会自动调 stream 模块（app.mi3s.hires）的 loadResource 解析地址。
+// ---------------------------------------------------------------------------
+async function loadDetail(link) {
+  if (!link) return null;
+  var parts = String(link).split("###");
+  var srcUrl = parts[0];
+  var vid = parts[1];
+  if (!srcUrl || !vid) return null;
+
+  var detailUrl = buildUrl(srcUrl, { ac: "detail", ids: vid });
+  var payload;
+  try {
+    var resp = await httpGet(detailUrl);
+    payload = unwrap(resp);
+  } catch (e) {
+    return null;
+  }
+  var list = (payload && payload.list) || [];
+  if (!Array.isArray(list) || !list.length) return null;
+  var vod = list[0];
+
+  var name = clean(vod.vod_name);
+  if (!name) return null;
+
+  // 统计剧集数（从 vod_play_url 拆出「第N集」标题数量，仅用于展示 mediaType）
+  var playUrl = String(vod.vod_play_url || "");
+  var blocks = playUrl.split("$$$");
+  var firstBlock = blocks[0] || "";
+  var chunks = firstBlock.split("#");
+  var epCount = 0;
+  for (var i = 0; i < chunks.length; i++) {
+    var ep = chunks[i].split("$");
+    if (ep.length >= 2 && clean(ep[0]) && /^https?:\/\//i.test(clean(ep.slice(1).join("$")))) epCount++;
+  }
+
+  // 只返回详情展示数据，不放 videoUrl/episodeItems 的播放地址：
+  // 播放地址统一交给 stream 模块（app.mi3s.hires 的 loadResource）解析，
+  // 它能正确处理「中转页 → 真实 m3u8」与裸直链两种情况。
+  return {
+    id: vid,
+    type: "url",
+    title: name,
+    description: clean(vod.vod_content) || clean(vod.vod_blurb) || clean(vod.vod_remarks) || "",
+    releaseDate: clean(vod.vod_year) || "",
+    posterPath: clean(vod.vod_pic),
+    backdropPath: clean(vod.vod_pic),
+    coverUrl: clean(vod.vod_pic),
+    rating: clean(vod.vod_score) || "",
+    mediaType: epCount > 1 ? "tv" : "movie",
+    genreTitle: clean(vod.type_name),
+    link: link,
+  };
 }
