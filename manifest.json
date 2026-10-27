@@ -1,7 +1,15 @@
 {
-  "title": "Rex 播放源合集（stream 类型）",
-  "description": "高清播放源模块合集：点进影片即出播放地址。含自研 hires + 开源成品 4kvm/maccms。",
+  "title": "Rex 播放源合集（stream + video）",
+  "description": "高清播放源模块合集：首页聚合片单（video）+ 播放源解析（stream）。点进影片即出播放地址。",
   "widgets": [
+    {
+      "id": "app.mi3s.homes",
+      "title": "高清片源聚合",
+      "version": "1.0.0",
+      "description": "聚合 28 个 CMS 源的首页片单：最新更新、热播榜、分类及二级题材",
+      "author": "mi3s",
+      "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/home.js"
+    },
     {
       "id": "app.mi3s.hires",
       "title": "高清片源",
