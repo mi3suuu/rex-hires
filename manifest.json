@@ -5,8 +5,8 @@
     {
       "id": "app.mi3s.hires",
       "title": "高清片源",
-      "version": "3.0.0",
-      "description": "固定 4K/DV 测试片直链 + 苹果CMS聚合搜索解析真实播放地址 + 直播流",
+      "version": "3.2.0",
+      "description": "28 个 CMS 源 + 6 个直播源 + 测试片直链，多源聚合解析真实播放地址",
       "author": "mi3s",
       "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/hires.js"
     },
