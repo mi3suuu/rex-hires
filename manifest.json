@@ -1,23 +1,30 @@
 {
-  "title": "高清无损片源（Rex 模块合集）",
-  "description": "4K 杜比视界 / 1080p 高码率测试流 / 苹果CMS采集源 / 直播源 / 公共版权片库 / 我的直链。全部公网直连。",
-  "icon": "",
+  "title": "Rex 播放源合集（stream 类型）",
+  "description": "高清播放源模块合集：点进影片即出播放地址。含自研 hires + 开源成品 4kvm/maccms。",
   "widgets": [
     {
       "id": "app.mi3s.hires",
-      "title": "高清无损片源",
-      "version": "2.0.0",
-      "requiredVersion": "0.0.1",
-      "description": "4K 杜比视界 / 1080p 测试流 / 苹果CMS采集源 / 直播源 / 公共版权片库 / 我的直链，六个入口一个模块。",
+      "title": "高清片源",
+      "version": "3.0.0",
+      "description": "固定 4K/DV 测试片直链 + 苹果CMS聚合搜索解析真实播放地址 + 直播流",
       "author": "mi3s",
-      "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/hires.js",
-      "i18n": {
-        "en": {
-          "高清无损片源": "Hi-Res Sources",
-          "4K 杜比视界 / 1080p 测试流 / 苹果CMS采集源 / 直播源 / 公共版权片库 / 我的直链，六个入口一个模块。": "4K Dolby Vision, 1080p test streams, CMS sources, live TV, public-domain library and your own direct links — six entries in one module.",
-          "4K 杜比视界 / 1080p 高码率测试流 / 苹果CMS采集源 / 直播源 / 公共版权片库 / 我的直链。全部公网直连。": "4K Dolby Vision, high-bitrate 1080p test streams, CMS sources, live TV, public-domain library and your own direct links. All public direct links."
-        }
-      }
+      "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/hires.js"
+    },
+    {
+      "id": "hyj1817.4kvm.resource",
+      "title": "4KVM 播放源",
+      "version": "1.0.1",
+      "description": "4KVM 电影、电视剧与动漫的 HLS 播放源",
+      "author": "HYJ1817",
+      "url": "https://raw.githubusercontent.com/HYJ1817/fw-modules/main/widgets/4kvm-resource.js"
+    },
+    {
+      "id": "hyj1817.maccms.resource",
+      "title": "苹果CMS 聚合源",
+      "version": "1.0.0",
+      "description": "苹果CMS通用聚合播放源：多站可配、自动翻页、片名归一化匹配",
+      "author": "HYJ1817",
+      "url": "https://raw.githubusercontent.com/HYJ1817/fw-modules/main/widgets/maccms-source.js"
     }
   ]
 }

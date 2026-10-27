@@ -1,25 +1,30 @@
 // ============================================================================
-// Rex 视频源模块 · 高清无损片源（app.mi3s.hires）
+// Rex 播放源模块 · 高清片源（app.mi3s.hires）
 // ----------------------------------------------------------------------------
-// 结构对齐官方模块 assets.rexnow.tv/scripts/rex-tmdb.js：
-//   WidgetMetadata = { ... }  →  每个 module.functionName 指向一个全局 async 函数
-//   函数返回「条目数组」，条目字段照抄官方 demo library.json 的形状（含 videoUrl）
-// 运行时提供的全局能力：Widget.http.get(url) / console.log / fetch
+// 【重要】这是 stream 类型模块（播放源解析器），不是 video 类型（首页列表）。
+//   Rex 点进一部影片后，会调用本模块的 loadResource(seriesName, episode)，
+//   由我们解析并返回真实可播放的 VideoResource[] 地址。
 //
-// 六个入口：
-//   dv4k     —— 杜比视界 / 4K 测试片（固定直链，实测真值）
-//   lab      —— 1080p 高码率测试流（固定直链，实测真值）
-//   cms      —— 苹果CMS 采集源（36 个公网源，动态拉片单 → 详情 → 播放地址）
-//   live     —— 直播源（iptv-org 等 GitHub 仓库 m3u，动态解析）
-//   archive  —— 公共版权片库（Internet Archive 动态查询）
-//   mine     —— 我的直链（自己填 remux 直链）
+// 返回条目字段（VideoResource，与 cheyong / 4kvm-resource 一致）：
+//   { name, description, url, customHeaders, playerType }
+//
+// loadResource(params) 的入参（Rex 运行时传入）：
+//   params.seriesName / title / name —— 片名
+//   params.season / episode        —— 季 / 集
+//   params.id / tmdbId / imdbId / link / videoUrl —— 其它上下文
+//
+// 逻辑：
+//   1) 片名命中「固定测试片」（杜比视界/4K、1080p 测试流）→ 直接返回真直链
+//   2) 片名命中「直播」关键词（NASA 等）→ 返回直播流
+//   3) 否则走苹果CMS聚合：按片名搜索 → 匹配 → 详情 → 解析 vod_play_url 真实地址
 // ============================================================================
 
 // ---------------------------------------------------------------------------
-// 我的直链（自己往里加，改完重新导入即可）
+// 我的直链（可选：给某部固定影片硬指一个 remux 直链）
+// 例： { title: "我的原盘", match: "某片名", url: "http://nas/movie.mkv" }
 // ---------------------------------------------------------------------------
 var MY_SOURCES = [
-  // { title: "示例 · 我的 NAS 上的原盘", url: "http://192.168.1.10:8080/movies/demo.mkv", note: "SMB 也能直接加库，不必走模块" },
+  // { title: "示例", match: "示例片名", url: "http://192.168.1.10:8080/movies/demo.mkv", note: "remux" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -27,117 +32,93 @@ var MY_SOURCES = [
 // ---------------------------------------------------------------------------
 var APPLE_STREAMS = [
   {
-    id: "apple-dv-atmos-4k",
-    title: "杜比视界 4K · Apple 官方测试片",
-    desc: "一条 master 同时含 H.264 / HEVC / 杜比视界三套阶梯共 100 档。4K 档：DV 25.1 Mbps（dvh1.05.06 + ec-3 全景声）、HEVC 24.8 Mbps、H.264 10.8 Mbps。公开可用唯一真 4K + DV P5 + Atmos 流。",
-    res: "3840×2160 · DV P5 · 25 Mbps",
+    match: ["杜比视界", "dolby", "dv atmos", "atmos", "4k 测试", "apple 官方测试"],
+    name: "杜比视界 4K · Apple 官方测试片",
+    desc: "DV 25.1 Mbps（dvh1.05.06 + ec-3 全景声）· 3840×2160",
     url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/adv_dv_atmos/main.m3u8",
-    duration: 0,
   },
   {
-    id: "apple-hevc-ladder",
-    title: "HEVC 1080p 阶梯 · Apple BipBop",
-    desc: "HEVC（hvc1）多码率阶梯，最高 1920×1080 · 约 8 Mbps。注意：这条不是 4K，网上不少清单标 4K 是错的。",
-    res: "1920×1080 · 约 8 Mbps",
+    match: ["hevc", "bipbop hevc"],
+    name: "HEVC 1080p 阶梯 · Apple BipBop",
+    desc: "HEVC 多码率阶梯 · 1920×1080 · 约 8 Mbps",
     url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_hevc/master.m3u8",
-    duration: 0,
   },
   {
-    id: "apple-fmp4-1080",
-    title: "fMP4 分片 · Apple BipBop",
-    desc: "fMP4 封装进阶示例，最高 1920×1080 · 约 8 Mbps。验分片封装与音轨切换。",
-    res: "1920×1080 · fMP4 · 约 8 Mbps",
+    match: ["fmp4"],
+    name: "fMP4 分片 · Apple BipBop",
+    desc: "fMP4 封装 · 1920×1080 · 约 8 Mbps",
     url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
-    duration: 0,
   },
   {
-    id: "apple-ts-1080",
-    title: "TS 分片 · Apple BipBop",
-    desc: "MPEG-TS 分片进阶示例，最高 1920×1080 · 约 8 Mbps。老链路兼容性对照。",
-    res: "1920×1080 · MPEG-TS · 约 8 Mbps",
+    match: ["ts 分片", "mpeg-ts", "bipbop ts"],
+    name: "TS 分片 · Apple BipBop",
+    desc: "MPEG-TS 分片 · 1920×1080 · 约 8 Mbps",
     url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8",
-    duration: 0,
   },
   {
-    id: "apple-bipbop-classic",
-    title: "BipBop 经典多轨",
-    desc: "最老牌的 Apple 测试流：多语言音轨 + 多档清晰度，最高 1080p 但码率仅 1 Mbps。只适合验多音轨/字幕。",
-    res: "1920×1080 · 1 Mbps · 多音轨",
+    match: ["bipbop", "经典多轨"],
+    name: "BipBop 经典多轨",
+    desc: "多语言音轨 + 多档清晰度 · 最高 1080p",
     url: "https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_16x9/bipbop_16x9_variant.m3u8",
-    duration: 0,
   },
 ];
 
 var LAB_STREAMS = [
   {
-    id: "mux-bbb-1080",
-    title: "Big Buck Bunny · Mux",
-    desc: "Mux 维护的 BBB 点播流，5 档自适应，最高 1920×1080 @ 6.2 Mbps。",
-    res: "1920×1080 · 6.2 Mbps",
+    match: ["big buck bunny", "bbb", "大雄兔"],
+    name: "Big Buck Bunny · Mux",
+    desc: "5 档自适应 · 1920×1080 @ 6.2 Mbps",
     url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-    duration: 596,
   },
   {
-    id: "mux-demo-1080",
-    title: "Mux 演示流",
-    desc: "Mux 官方点播演示，1080p @ 4.7 Mbps。",
-    res: "1920×1080 · 4.7 Mbps",
+    match: ["mux 演示", "mux demo"],
+    name: "Mux 演示流",
+    desc: "1080p @ 4.7 Mbps",
     url: "https://stream.mux.com/VZtzUzGRv02OhRnZCxcNg49OilvolTqdnFLEqBsTwaxU.m3u8",
-    duration: 0,
   },
   {
-    id: "unified-tos",
-    title: "Tears of Steel · Unified Streaming",
-    desc: "Blender 开源电影《Tears of Steel》完整版点播，7 档，最高 1680×750 @ 2.5 Mbps。内容 CC-BY。",
-    res: "1680×750 · 2.5 Mbps",
+    match: ["tears of steel", "钢铁之泪"],
+    name: "Tears of Steel · Unified Streaming",
+    desc: "Blender 开源电影 · 7 档 · 最高 1680×750",
     url: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
-    duration: 734,
   },
   {
-    id: "shaka-angel-one",
-    title: "Angel One · Shaka 多语言",
-    desc: "Google Shaka 多语言样本流，10 档，验字幕与音轨切换。",
-    res: "768×576 · 8 Mbps",
+    match: ["angel one", "shaka"],
+    name: "Angel One · Shaka 多语言",
+    desc: "Google Shaka 样本 · 10 档 · 验字幕音轨",
     url: "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8",
-    duration: 0,
   },
   {
-    id: "jwplayer-1080",
-    title: "JW Player 演示 · 1080p",
-    desc: "JW Player 官方演示流，1080p @ 5.2 Mbps。",
-    res: "1920×1080 · 5.2 Mbps",
+    match: ["jw player", "jwplayer"],
+    name: "JW Player 演示 · 1080p",
+    desc: "1080p @ 5.2 Mbps",
     url: "https://cdn.jwplayer.com/manifests/pZxWPRg4.m3u8",
-    duration: 0,
   },
+];
+
+// ---------------------------------------------------------------------------
+// 直播测试流（片名命中「直播/live/nasa」时返回）
+// ---------------------------------------------------------------------------
+var LIVE_TEST_STREAMS = [
   {
-    id: "akamai-live-1080",
-    title: "Akamai 测试直播 · 1080p",
-    desc: "24 小时循环真直播流，最高 1920×1080 @ 12.9 Mbps。测断线重连、网络切换。",
-    res: "1920×1080 · 12.9 Mbps · Live",
-    url: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
-    duration: 0,
-  },
-  {
-    id: "akamai-eight-1080",
-    title: "Akamai Eight 直播 · 1080p",
-    desc: "Akamai 另一路直播流，1080p @ 6.7 Mbps。",
-    res: "1920×1080 · 6.7 Mbps · Live",
-    url: "https://moctobpltc-i.akamaihd.net/hls/live/571329/eight/playlist.m3u8",
-    duration: 0,
-  },
-  {
-    id: "nasa-tv",
-    title: "NASA TV · 公共直播",
-    desc: "NASA 官方公共频道直播，最高 1280×720。合法公共信号。",
-    res: "1280×720 · Live",
+    match: ["nasa", "直播"],
+    name: "NASA TV · 公共直播",
+    desc: "NASA 官方公共信号 · 最高 1280×720",
     url: "https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8",
-    duration: 0,
+  },
+  {
+    match: ["akamai", "直播测试"],
+    name: "Akamai 测试直播 · 1080p",
+    desc: "24h 循环真直播 · 1920×1080 @ 12.9 Mbps",
+    url: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
   },
 ];
 
 // ---------------------------------------------------------------------------
 // 二、苹果CMS 采集源（36 个公网源，来自 LibreTV 预置源清单）
-//     接口：{url}?ac=list 或 {url} 返回片单；{url}?ac=detail&ids= 返回播放地址
+//     列表/搜索接口：{url}?ac=videolist&wd= 或 {url}?ac=list
+//     详情接口：{url}?ac=detail&ids={vod_id} → list[0].vod_play_url
+//     vod_play_url 格式："第01集$url#第02集$url$$$多源分隔"
 // ---------------------------------------------------------------------------
 var CMS_SOURCES = [
   { name: "非凡资源", url: "https://cj.ffzyapi.com/api.php/provide/vod" },
@@ -179,381 +160,226 @@ var CMS_SOURCES = [
 ];
 
 // ---------------------------------------------------------------------------
-// 三、直播源（m3u 订阅，来自 GitHub 公开仓库）
-// ---------------------------------------------------------------------------
-var LIVE_SOURCES = [
-  { name: "央视·国内频道", url: "https://iptv-org.github.io/iptv/countries/cn.m3u" },
-  { name: "全球电影频道", url: "https://iptv-org.github.io/iptv/categories/movies.m3u" },
-  { name: "全球纪录片频道", url: "https://iptv-org.github.io/iptv/categories/documentary.m3u" },
-  { name: "电视直播·综合", url: "https://cdn.jsdelivr.net/gh/vbskycn/iptv@master/tv/iptv4.m3u" },
-  { name: "港澳台及海外", url: "https://raw.githubusercontent.com/YueChan/Live/main/GNTV.m3u" },
-];
-
-// ---------------------------------------------------------------------------
-// 四、公共版权片库（Internet Archive）
-// ---------------------------------------------------------------------------
-var IA_CATEGORIES = [
-  { value: "classic", title: "高分长片", q: "collection:(feature_films) AND downloads:[50000 TO null]" },
-  { value: "silent", title: "默片时代", q: "collection:(silent_films)" },
-  { value: "noir", title: "黑色电影", q: 'subject:("film noir")' },
-  { value: "scifi", title: "科幻", q: 'subject:("science fiction")' },
-  { value: "cartoon", title: "经典动画", q: "collection:(animationandcartoons)" },
-  { value: "prelinger", title: "纪录影像", q: "collection:(prelinger)" },
-  { value: "tv", title: "老电视", q: "collection:(classic_tv)" },
-];
-
-// ---------------------------------------------------------------------------
-// 元数据
+// 元数据：stream 类型，只有一个 loadResource 入口
 // ---------------------------------------------------------------------------
 WidgetMetadata = {
   id: "app.mi3s.hires",
-  title: "高清无损片源",
-  version: "2.0.0",
+  title: "高清片源",
+  version: "3.0.0",
   requiredVersion: "0.0.1",
-  description: "4K 杜比视界 / 1080p 高码率测试流 / 苹果CMS采集源 / 直播源 / 公共版权片库 / 我的直链。全部公网直连。",
+  description: "高清片源解析：固定 4K/DV 测试片直链 + 苹果CMS聚合搜索解析真实播放地址 + 直播流。点进影片即出播放源。",
   author: "mi3s",
   site: "https://github.com/mi3s",
   iconurl: "",
-  detailCacheDuration: 360,
+  detailCacheDuration: 60,
   modules: [
-    { type: "video", id: "dv4k", title: "杜比视界 / 4K", functionName: "dv4k", cacheDuration: 86400, params: [] },
-    { type: "video", id: "lab", title: "1080p 测试流", functionName: "lab", cacheDuration: 3600, params: [] },
-    {
-      type: "video", id: "cms", title: "采集源 · 影视", functionName: "cms", cacheDuration: 600,
-      params: [
-        {
-          type: "enumeration", title: "源", name: "site",
-          enumOptions: CMS_SOURCES.map(function (s, i) { return { value: String(i), title: s.name }; }),
-        },
-      ],
-    },
-    {
-      type: "video", id: "live", title: "直播源", functionName: "live", cacheDuration: 3600,
-      params: [
-        {
-          type: "enumeration", title: "频道组", name: "site",
-          enumOptions: LIVE_SOURCES.map(function (s, i) { return { value: String(i), title: s.name }; }),
-        },
-      ],
-    },
-    {
-      type: "video", id: "archive", title: "公共版权片库", functionName: "archive", cacheDuration: 21600,
-      params: [
-        {
-          type: "enumeration", title: "分类", name: "category",
-          enumOptions: IA_CATEGORIES.map(function (c) { return { value: c.value, title: c.title }; }),
-        },
-      ],
-    },
-    { type: "video", id: "mine", title: "我的直链", functionName: "mine", cacheDuration: 0, params: [] },
+    { id: "loadResource", title: "加载资源", functionName: "loadResource", type: "stream", cacheDuration: 0, params: [] },
   ],
 };
 
 // ---------------------------------------------------------------------------
 // 工具
 // ---------------------------------------------------------------------------
-function makeItem(o) {
+function httpGet(url, options) {
+  // 优先 Widget.http.get（Rex 运行时），回退 fetch（Node 测试）
+  if (typeof Widget !== "undefined" && Widget && Widget.http && Widget.http.get) {
+    return Widget.http.get(url, options);
+  }
+  var headers = (options && options.headers) || { "User-Agent": "RexHires/3.0" };
+  return fetch(url, { headers: headers }).then(function (res) {
+    return { data: res, statusCode: res.status };
+  });
+}
+
+function getText(url, options) {
+  return httpGet(url, options).then(function (r) {
+    if (r == null) return "";
+    if (typeof r === "string") return r;
+    if (typeof r.data === "string") return r.data;
+    if (r.data && typeof r.data.text === "function") return r.data.text();
+    return JSON.stringify(r.data || r);
+  });
+}
+
+function getJSON(url, options) {
+  return getText(url, options).then(function (t) {
+    try { return JSON.parse(t); } catch (e) { return null; }
+  });
+}
+
+function normTitle(s) {
+  return String(s || "").toLowerCase().replace(/[\s：:·・—_\-–（）()\[\]【】,.，。'"]/g, "");
+}
+
+function matchesAny(title, keys) {
+  var t = normTitle(title);
+  for (var i = 0; i < keys.length; i++) {
+    if (t.indexOf(normTitle(keys[i])) >= 0) return true;
+  }
+  return false;
+}
+
+function makeResource(name, desc, url, headers) {
   return {
-    id: o.id,
-    mediaType: "movie",
-    title: o.title,
-    originalTitle: o.title,
-    description: o.desc || "",
-    releaseDate: o.releaseDate || "",
-    rating: typeof o.rating === "number" ? o.rating : 0,
-    genres: o.genres || [],
-    genreIds: [],
-    originCountry: o.country || "",
-    companyIds: [],
-    networkIds: [],
-    posterPath: o.poster || "",
-    backdropPath: o.poster || "",
-    backdropPaths: o.poster ? [o.poster] : [],
-    duration: typeof o.duration === "number" ? o.duration : 0,
-    videoUrl: o.url,
-    people: o.people || [],
-    tags: o.tags || [],
-    ranks: {},
-    tagline: o.note || "",
+    name: name,
+    description: desc || "",
+    url: url,
+    customHeaders: headers || {},
+    playerType: "app",
   };
 }
 
-async function httpGet(url) {
-  try {
-    if (typeof Widget !== "undefined" && Widget && Widget.http && Widget.http.get) {
-      var r = await Widget.http.get(url);
-      if (r && typeof r === "object" && r.data !== undefined) return r.data;
-      return r;
-    }
-  } catch (e) {
-    console.log("[hires] Widget.http 失败，回退 fetch:", e && e.message);
-  }
-  var res = await fetch(url, { headers: { "User-Agent": "RexHires/2.0" } });
-  var text = await res.text();
-  try { return JSON.parse(text); } catch (e2) { return text; }
-}
-
-async function httpText(url) {
-  var r = await httpGet(url);
-  if (typeof r === "string") return r;
-  return JSON.stringify(r);
-}
-
-// ---------------------------------------------------------------------------
-// 入口 1：杜比视界 / 4K
-// ---------------------------------------------------------------------------
-async function dv4k(params) {
-  return APPLE_STREAMS.map(function (s) {
-    return makeItem({
-      id: s.id, title: s.title, desc: s.desc, url: s.url,
-      duration: s.duration, note: s.res, genres: ["测试片源"], tags: ["uhd", "dolby-vision"],
-    });
-  });
-}
-
-// ---------------------------------------------------------------------------
-// 入口 2：1080p 测试流
-// ---------------------------------------------------------------------------
-async function lab(params) {
-  return LAB_STREAMS.map(function (s) {
-    return makeItem({
-      id: s.id, title: s.title, desc: s.desc, url: s.url,
-      duration: s.duration, note: s.res, genres: ["测试片源"], tags: ["hls"],
-    });
-  });
-}
-
-// ---------------------------------------------------------------------------
-// 入口 3：苹果CMS 采集源（动态）
-// 片单接口：{url}?ac=detail 之外，默认列表接口是 {url}（带 page）
-// 详情接口：{url}?ac=detail&ids={vod_id} → list[0].vod_play_url（"第01集$url#第02集$url"）
-// ---------------------------------------------------------------------------
-function pickFirstPlayUrl(playUrl) {
-  if (!playUrl) return "";
-  // 形如 "第01集$url#第02集$url$$$..."（多个播放源用 $$$ 分隔）
+// 从 vod_play_url 解析出所有播放地址（含多源、多集）
+function parsePlayUrls(playUrl, episode) {
+  var out = [];
+  if (!playUrl) return out;
+  // 多个播放源用 $$$ 分隔
   var srcs = String(playUrl).split("$$$");
   for (var i = 0; i < srcs.length; i++) {
+    // 每个源内 "第01集$url#第02集$url"
     var segs = srcs[i].split("#");
     for (var j = 0; j < segs.length; j++) {
-      var m = segs[j].indexOf("$");
+      var seg = segs[j];
+      var m = seg.indexOf("$");
       if (m < 0) continue;
-      var url = segs[j].slice(m + 1);
-      if (url && /^https?:\/\//.test(url)) return url;
+      var label = seg.slice(0, m).trim();
+      var url = seg.slice(m + 1).trim();
+      if (!url || !/^https?:\/\//i.test(url)) continue;
+      var ep = parseInt((label.match(/(\d+)/) || [])[1], 10) || 0;
+      out.push({ label: label, url: url, ep: ep, srcIdx: i });
     }
   }
-  return "";
+  // 若指定了集数，优先返回那一集
+  var wanted = parseInt(episode, 10) || 0;
+  if (wanted > 0) {
+    var matched = out.filter(function (o) { return o.ep === wanted; });
+    if (matched.length) return matched;
+  }
+  return out;
 }
 
-async function cms(params) {
-  var idx = parseInt(params && params.site, 10);
-  if (isNaN(idx) || idx < 0 || idx >= CMS_SOURCES.length) idx = 0;
-  var src = CMS_SOURCES[idx];
+// ---------------------------------------------------------------------------
+// 苹果CMS：按片名搜索 + 详情解析（一个源）
+// ---------------------------------------------------------------------------
+async function searchOneSource(src, title, episode) {
   var base = src.url;
-  var listUrl = base;
-  if (listUrl.indexOf("?") < 0) listUrl += "?ac=detail";
-  // 有些源需要 ?ac=list，这里统一先试不带参数的列表（返回 list）
   var sep = base.indexOf("?") >= 0 ? "&" : "?";
-  listUrl = base + sep + "ac=list";
+  // 先试搜索接口
+  var searchUrl = base + sep + "ac=videolist&wd=" + encodeURIComponent(title);
+  var payload = await getJSON(searchUrl);
+  var list = (payload && payload.list) || [];
+  if (!Array.isArray(list) || !list.length) {
+    // 回退：不带 wd 的列表接口，本地过滤
+    var listPayload = await getJSON(base + sep + "ac=list");
+    list = (listPayload && listPayload.list) || [];
+  }
 
-  var items = [];
-  try {
-    var payload = await httpGet(listUrl);
-    var list = (payload && payload.list) || [];
-    // 有的源返回 {code,list:[...]}，有的返回 {list:[...]}
-    if (!Array.isArray(list)) list = (payload && payload.data && payload.data.list) || [];
+  var target = null;
+  var wantNorm = normTitle(title);
+  for (var i = 0; i < list.length; i++) {
+    var it = list[i];
+    if (!it || !it.vod_id) continue;
+    var n = normTitle(it.vod_name);
+    if (!wantNorm) { target = it; break; }
+    if (n === wantNorm || n.indexOf(wantNorm) >= 0 || wantNorm.indexOf(n) >= 0) {
+      target = it;
+      break;
+    }
+  }
+  if (!target) return [];
 
-    var max = Math.min(list.length, 20);
-    for (var i = 0; i < max; i++) {
-      var it = list[i];
-      if (!it || !it.vod_id) continue;
-      var playUrl = it.vod_play_url;
-      // 列表里通常没有播放地址，需要二次请求 detail
-      var detailUrl = base + (base.indexOf("?") >= 0 ? "&" : "?") + "ac=detail&ids=" + it.vod_id;
-      var play = "";
-      try {
-        var det = await httpGet(detailUrl);
-        var dl = (det && det.list && det.list[0]) || {};
-        play = dl.vod_play_url ? pickFirstPlayUrl(dl.vod_play_url) : (it.vod_play_url ? pickFirstPlayUrl(it.vod_play_url) : "");
-      } catch (e2) {
-        play = it.vod_play_url ? pickFirstPlayUrl(it.vod_play_url) : "";
+  // 详情拿 vod_play_url
+  var detailUrl = base + sep + "ac=detail&ids=" + target.vod_id;
+  var det = await getJSON(detailUrl);
+  var dl = (det && det.list && det.list[0]) || {};
+  var playUrl = dl.vod_play_url || target.vod_play_url || "";
+  if (!playUrl) return [];
+
+  var urls = parsePlayUrls(playUrl, episode);
+  var out = [];
+  var seen = {};
+  for (var k = 0; k < urls.length; k++) {
+    var u = urls[k];
+    if (seen[u.url]) continue;
+    seen[u.url] = true;
+    out.push(makeResource(
+      src.name + (u.label ? " · " + u.label : ""),
+      target.vod_name || "",
+      u.url,
+      { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15", Referer: base }
+    ));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// 主入口：loadResource(params) → VideoResource[]
+// ---------------------------------------------------------------------------
+async function loadResource(params) {
+  params = params || {};
+  var title = String(params.seriesName || params.title || params.name || "").trim();
+  var episode = params.episode;
+  var results = [];
+
+  // 1) 我的直链
+  for (var i = 0; i < MY_SOURCES.length; i++) {
+    var s = MY_SOURCES[i];
+    if (s.match && title && !matchesAny(title, [s.match])) continue;
+    results.push(makeResource(s.title || "我的直链", s.note || "", s.url, s.headers || {}));
+  }
+
+  // 2) 固定测试片（4K/DV + 1080p）
+  if (title) {
+    var pools = [APPLE_STREAMS, LAB_STREAMS, LIVE_TEST_STREAMS];
+    for (var p = 0; p < pools.length; p++) {
+      for (var q = 0; q < pools[p].length; q++) {
+        var item = pools[p][q];
+        if (matchesAny(title, item.match)) {
+          results.push(makeResource(item.name, item.desc, item.url, {}));
+        }
       }
-      if (!play) continue;
-
-      items.push(makeItem({
-        id: "cms-" + idx + "-" + it.vod_id,
-        title: it.vod_name || ("影片 " + it.vod_id),
-        desc: (it.type_name || "") + (it.vod_remarks ? " · " + it.vod_remarks : ""),
-        url: play,
-        poster: it.vod_pic || "",
-        releaseDate: it.vod_time ? String(it.vod_time).slice(0, 10) : "",
-        note: it.vod_remarks || "",
-        genres: [src.name, it.type_name || "影视"],
-        tags: ["cms", src.name],
-      }));
     }
-  } catch (e) {
-    console.log("[hires] CMS 源失败:", src.name, e && e.message);
   }
-  return items;
-}
 
-// ---------------------------------------------------------------------------
-// 入口 4：直播源（解析 m3u）
-// ---------------------------------------------------------------------------
-function parseM3U(text, limit) {
-  var lines = text.split(/\r?\n/);
-  var items = [];
-  var cur = null;
-  limit = limit || 60;
-  for (var i = 0; i < lines.length && items.length < limit; i++) {
-    var l = lines[i].trim();
-    if (!l) continue;
-    if (l.indexOf("#EXTINF") === 0) {
-      var name = l.split(",").slice(1).join(",").trim();
-      // 取 group-title 或 tvg-name 作为补充
-      cur = { name: name || "频道" };
-      var grp = l.match(/group-title="([^"]*)"/);
-      if (grp) cur.group = grp[1];
-    } else if (l.indexOf("#") !== 0 && /^https?:\/\//.test(l)) {
-      if (cur) {
-        items.push({ name: cur.name, group: cur.group || "", url: l });
-        cur = null;
+  // 3) 苹果CMS 聚合搜索（多源并行，谁先有结果用谁，最多并发 6 个）
+  if (!title) return results;
+
+  var MAX_SOURCES = 8;
+  var batch = CMS_SOURCES.slice(0, MAX_SOURCES);
+  var settled = false;
+  var errors = 0;
+
+  await new Promise(function (resolve) {
+    var pending = 0;
+    var done = function () {
+      if (settled) return;
+      if (results.length > 0) {
+        settled = true;
+        resolve();
+        return;
       }
+      if (errors >= batch.length) { resolve(); return; }
+      if (pending === 0 && errors >= batch.length) resolve();
+    };
+    for (var b = 0; b < batch.length; b++) {
+      (function (src) {
+        pending++;
+        searchOneSource(src, title, episode).then(function (r) {
+          if (!settled && r && r.length) {
+            for (var x = 0; x < r.length; x++) results.push(r[x]);
+          }
+        }).catch(function (e) {
+          // 忽略单源失败
+        }).finally(function () {
+          pending--;
+          errors++;
+          done();
+        });
+      })(batch[b]);
     }
-  }
-  return items;
-}
-
-async function live(params) {
-  var idx = parseInt(params && params.site, 10);
-  if (isNaN(idx) || idx < 0 || idx >= LIVE_SOURCES.length) idx = 0;
-  var src = LIVE_SOURCES[idx];
-
-  var items = [];
-  try {
-    var text = await httpText(src.url);
-    var chans = parseM3U(text, 60);
-    for (var i = 0; i < chans.length; i++) {
-      var c = chans[i];
-      items.push(makeItem({
-        id: "live-" + idx + "-" + i,
-        title: c.name,
-        desc: c.group || src.name,
-        url: c.url,
-        genres: [c.group || "直播", src.name],
-        tags: ["live", src.name],
-        note: "直播",
-      }));
-    }
-  } catch (e) {
-    console.log("[hires] 直播源失败:", src.name, e && e.message);
-  }
-  return items;
-}
-
-// ---------------------------------------------------------------------------
-// 入口 5：公共版权片库（Internet Archive）
-// ---------------------------------------------------------------------------
-function pickBestVideoFile(files) {
-  var best = null;
-  for (var i = 0; i < files.length; i++) {
-    var f = files[i];
-    var name = String(f.name || "");
-    var lower = name.toLowerCase();
-    if (lower.indexOf(".mp4") < 0 && lower.indexOf(".m4v") < 0) continue;
-    if (lower.indexOf("_512kb") >= 0) continue;
-    var h = parseInt(f.height, 10) || 0;
-    var size = parseInt(f.size, 10) || 0;
-    var score = h * 1000000 + size / 1024;
-    if (!best || score > best.score) best = { name: name, height: h, size: size, score: score };
-  }
-  return best;
-}
-
-function parseDuration(meta) {
-  var raw = meta && (meta.length || meta.runtime);
-  if (!raw) return 0;
-  var m = String(raw).match(/(\d+):(\d+):(\d+)|(\d+):(\d+)/);
-  if (m) {
-    if (m[1]) return (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]);
-    return (+m[4]) * 60 + (+m[5]);
-  }
-  var n = parseFloat(String(raw));
-  return isNaN(n) ? 0 : Math.round(n);
-}
-
-async function archive(params) {
-  var wanted = (params && params.category) || "classic";
-  var cat = IA_CATEGORIES[0];
-  for (var i = 0; i < IA_CATEGORIES.length; i++) {
-    if (IA_CATEGORIES[i].value === wanted) cat = IA_CATEGORIES[i];
-  }
-
-  var search =
-    "https://archive.org/advancedsearch.php?q=" +
-    encodeURIComponent(cat.q + " AND mediatype:movies") +
-    "&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=year&fl%5B%5D=description" +
-    "&fl%5B%5D=downloads&sort%5B%5D=downloads+desc&rows=16&page=1&output=json";
-
-  var payload = await httpGet(search);
-  var docs = (payload && payload.response && payload.response.docs) || [];
-  if (!docs.length) { console.log("[hires] IA 无结果:", cat.q); return []; }
-
-  var picked = [];
-  for (var j = 0; j < docs.length && picked.length < 10; j++) {
-    var doc = docs[j];
-    if (!doc.identifier) continue;
-    try {
-      var meta = await httpGet("https://archive.org/metadata/" + doc.identifier);
-      if (!meta || !meta.files) continue;
-      var best = pickBestVideoFile(meta.files);
-      if (!best) continue;
-      var md = meta.metadata || {};
-      picked.push({ doc: doc, md: md, file: best, height: best.height, size: best.size });
-    } catch (e) {
-      console.log("[hires] metadata 失败:", doc.identifier, e && e.message);
-    }
-  }
-
-  picked.sort(function (a, b) {
-    if (b.height !== a.height) return b.height - a.height;
-    return b.size - a.size;
+    // 兜底：10 秒后强制结束
+    setTimeout(function () { if (!settled) { settled = true; resolve(); } }, 10000);
   });
 
-  var items = [];
-  for (var k = 0; k < picked.length && items.length < 8; k++) {
-    var p = picked[k];
-    var d2 = p.doc;
-    items.push(makeItem({
-      id: "ia-" + d2.identifier,
-      title: d2.title || p.md.title || d2.identifier,
-      desc: (d2.description || p.md.description || "").toString().slice(0, 260),
-      url: "https://archive.org/download/" + d2.identifier + "/" + encodeURIComponent(p.file.name).replace(/%2F/g, "/"),
-      poster: "https://archive.org/services/img/" + d2.identifier,
-      duration: parseDuration(p.md),
-      releaseDate: d2.year ? String(d2.year) : "",
-      note: (p.height ? p.height + "p · " : "") + Math.round(p.size / 1048576) + " MB",
-      genres: [cat.title],
-      country: p.md.country || "",
-      tags: ["archive.org", "public-domain"],
-    }));
-  }
-  return items;
-}
-
-// ---------------------------------------------------------------------------
-// 入口 6：我的直链
-// ---------------------------------------------------------------------------
-async function mine(params) {
-  return (MY_SOURCES || []).map(function (s, i) {
-    return makeItem({
-      id: "mine-" + i,
-      title: s.title || ("我的直链 " + (i + 1)),
-      desc: s.note || "",
-      url: s.url,
-      poster: s.poster || "",
-      genres: ["我的库"],
-      tags: ["custom"],
-    });
-  });
+  return results;
 }
