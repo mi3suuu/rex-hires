@@ -1,0 +1,23 @@
+{
+  "title": "高清无损片源",
+  "description": "实测过高码率 / 4K / 杜比视界直连片源，以及 Internet Archive 公共版权片库。可与官方合集并存。",
+  "icon": "",
+  "widgets": [
+    {
+      "id": "app.mi3s.hires",
+      "title": "高清无损片源",
+      "version": "1.0.0",
+      "requiredVersion": "0.0.1",
+      "description": "杜比视界 4K / HEVC 阶梯 / 高码率 HLS / 公共版权片库 / 我的直链，五个入口一个模块。",
+      "author": "mi3s",
+      "url": "https://raw.githubusercontent.com/mi3s/rex-hires/main/hires.js",
+      "i18n": {
+        "en": {
+          "高清无损片源": "Hi-Res Sources",
+          "杜比视界 4K / HEVC 阶梯 / 高码率 HLS / 公共版权片库 / 我的直链，五个入口一个模块。": "Dolby Vision 4K, HEVC ladder, high-bitrate HLS, public-domain library and your own direct links — all in one module.",
+          "实测过高码率 / 4K / 杜比视界直连片源，以及 Internet Archive 公共版权片库。可与官方合集并存。": "Verified high-bitrate, 4K and Dolby Vision direct streams, plus the Internet Archive public-domain catalog. Coexists with the official collection."
+        }
+      }
+    }
+  ]
+}
