@@ -27,7 +27,7 @@ WidgetMetadata = {
   description: "首页片单走 TMDB 片库（最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材），点进即调高清片源(stream)回 CMS 源解析播放地址",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "2.2.0",
+  version: "2.3.0",
   requiredVersion: "0.0.1",
   detailCacheDuration: 60,
   modules: [
@@ -147,30 +147,21 @@ function applySortBy(params, type) {
   else if (params.sort_by === "release_date.asc") params.sort_by = dateField + ".asc";
 }
 
-// 海报图床拼接（严格对齐 RexHome v151 明文 rexHomeNativeImage / rexHomeFinishItem）：
-//   RexHome 在【最终返回前】（rexHomeFinishItem）把 TMDB 相对路径 /xxx.jpg
-//   拼成完整 URL https://image.tmdb.org/t/p/{size}/xxx.jpg，再回传给 Rex。
-//   即：返回给 Rex 的 posterPath/backdropPath/coverUrl 必须是【完整 https URL】，
-//   不是相对路径！这是之前「海报出不来」的根本原因。
-function tmdbImage(path, size) {
-  if (typeof path !== "string") return "";
-  var p = path.trim();
-  if (!p) return "";
-  var sz = size || "w500";
-  // 已是相对路径 /xxx.jpg → 拼完整 URL
-  if (p.charAt(0) === "/") return "https://image.tmdb.org/t/p/" + sz + p;
-  // 已是完整 TMDB 图床 URL（original 或 wXXX）→ 统一到指定 size
-  var m = p.match(/^https:\/\/image\.tmdb\.org\/t\/p\/(?:original|w[0-9]+)(\/[^?#]+)$/);
-  if (m) return "https://image.tmdb.org/t/p/" + sz + m[1];
-  // 其它完整 URL（豆瓣等）→ 原样返回（非 TMDB 图床，Rex 自行兜底）
-  if (/^https?:\/\//.test(p)) return p;
-  return "";
-}
-
 // 调 TMDB 接口并把 results 转成 type:"tmdb" 条目。
-// 严格对齐 RexHome v151 的 rexHomeMatchedCard + rexHomeFinishItem 两个环节：
-//   - rexHomeMatchedCard: id=Number(x.id), posterPath=x.poster_path(相对), rating=Math.round(r*10)/10(数字)
-//   - rexHomeFinishItem: 最终回传前 id→String(Number()), rating→String(), poster/backdrop→拼完整 URL
+// 严格对齐官方模块 rex.tmdb（https://assets.rexnow.tv/scripts/rex-tmdb.js）的 fetchData：
+//   return {
+//     id: item.id,                        // ← 数字（Number，不加 String）
+//     type: "tmdb",
+//     title: item.title ?? item.name,
+//     description: item.overview,
+//     releaseDate: item.release_date ?? item.first_air_date,
+//     backdropPath: item.backdrop_path,   // ← 相对路径 /xxx.jpg（不拼 URL！Rex 客户端自己拼图床）
+//     posterPath: item.poster_path,       // ← 相对路径
+//     rating: item.vote_average,          // ← 数字（不加 String）
+//     mediaType: mediaType,
+//     genreTitle: genreTitleWith(item.genre_ids),
+//   };
+// 这是官方首页 video 模块的最终权威契约，无 coverUrl、无 finish 后处理。
 async function tmdbFetch(api, params, forceMediaType) {
   var response;
   try {
@@ -189,38 +180,18 @@ async function tmdbFetch(api, params, forceMediaType) {
       if (mediaType == null) mediaType = item.title ? "movie" : "tv";
     }
     if (mediaType !== "movie" && mediaType !== "tv") continue;
-
-    // ---- 第一步：rexHomeMatchedCard（内部构造，相对路径 + 数字 id）----
-    var card = {
-      id: Number(item.id),
+    out.push({
+      id: item.id,
       type: "tmdb",
-      mediaType: mediaType,
       title: item.title || item.name,
-      posterPath: item.poster_path || "",
-      backdropPath: item.backdrop_path || "",
-      releaseDate: item.release_date || item.first_air_date || undefined,
+      description: item.overview,
+      releaseDate: item.release_date || item.first_air_date,
+      backdropPath: item.backdrop_path,
+      posterPath: item.poster_path,
+      rating: item.vote_average,
+      mediaType: mediaType,
       genreTitle: genreTitleOf(item.genre_ids),
-      description: item.overview || "",
-    };
-    // rating：vote_count>=20 才给，四舍五入到 1 位（对齐 rexHomeCountedRating）
-    if (item.vote_average != null && item.vote_count != null && Number(item.vote_count) >= 20) {
-      card.rating = Math.round(Number(item.vote_average) * 10) / 10;
-    }
-
-    // ---- 第二步：rexHomeFinishItem（最终回传前处理）----
-    // 2a. id → 纯数字字符串
-    card.id = String(Number(card.id));
-    // 2b. rating → 字符串
-    if (card.rating != null) card.rating = String(card.rating);
-    // 2c. 海报 → 拼完整 URL（w500 竖图 / w780 横图）
-    var sizes = { posterPath: "w500", backdropPath: "w780", coverUrl: "w500" };
-    for (var k in sizes) {
-      if (!card[k]) continue;
-      var v = tmdbImage(card[k], sizes[k]);
-      if (/^https:\/\//.test(v)) card[k] = v;
-      else delete card[k];
-    }
-    out.push(card);
+    });
   }
   return out;
 }
