@@ -27,7 +27,7 @@ WidgetMetadata = {
   description: "首页片单走 TMDB 片库（最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材），点进即调高清片源(stream)回 CMS 源解析播放地址",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "2.0.2",
+  version: "2.1.0",
   requiredVersion: "0.0.1",
   detailCacheDuration: 60,
   modules: [
@@ -148,19 +148,15 @@ function applySortBy(params, type) {
 }
 
 // 海报字段处理：Rex 期望 posterPath/backdropPath 传 TMDB 相对路径（/xxx.jpg），
-// 客户端自己拼 image.tmdb.org 图床。不能传完整 URL、也不能传非 TMDB 的路径。
-//
-// 权威证据（能正常显示海报的第三方 widget @rexnow/douban / douban-bridge）：
-//   function r0 = "https://image.tmdb.org/t/p/original"
-//   function r1(e){ return e?.startsWith(r0) ? e.slice(r0.length) : e ?? void 0 }
-//   posterPath: r1(e.images.poster)   ← 把 TMDB 完整 URL 剥离成相对路径 /xxx.jpg
-// 即：Rex 对「所有模块」都自动拼图床，模块侧只需回相对路径（或完整 URL 也行，
-// 但相对路径最稳）。之前「第三方要自己拼完整 URL」的假设是错的，已回退。
+// 客户端自己拼 image.tmdb.org 图床。权威参照 RexHome v151 明文（rexHomeMatchedCard）：
+//   posterPath: x.poster_path   ← 直接传 TMDB 返回的相对路径，不拼 URL
+//   rexHomeImage() 只在校验时用，最终回传的是相对路径。
 function tmdbImage(path) {
   if (typeof path !== "string") return "";
   var p = path.trim();
   if (!p) return "";
-  // 已是完整 TMDB 图床 URL → 剥离成相对路径（对齐 douban-bridge 的 r1）
+  if (p.charAt(0) === "/") return p; // TMDB 相对路径，原样返回
+  // 已是完整 TMDB 图床 URL → 剥离成相对路径
   var prefix = "https://image.tmdb.org/t/p/";
   if (p.indexOf(prefix) === 0) {
     var rest = p.slice(prefix.length);
@@ -168,11 +164,10 @@ function tmdbImage(path) {
     if (slash >= 0) return rest.slice(slash); // /w500/xxx.jpg → /xxx.jpg
     return "";
   }
-  if (p.charAt(0) === "/") return p; // 已是相对路径，原样返回
-  return ""; // 其它完整 URL（豆瓣等非 TMDB）不支持，返回空让 Rex 兜底
+  return ""; // 其它完整 URL 不支持，返回空让 Rex 兜底
 }
 
-// 调 TMDB 接口并把 results 转成 type:"tmdb" 条目（参照 bangumi.fetchData / douban-bridge r2）
+// 调 TMDB 接口并把 results 转成 type:"tmdb" 条目（严格对齐 RexHome v151 rexHomeMatchedCard）
 async function tmdbFetch(api, params, forceMediaType) {
   var response;
   try {
@@ -191,20 +186,24 @@ async function tmdbFetch(api, params, forceMediaType) {
       if (mediaType == null) mediaType = item.title ? "movie" : "tv";
     }
     if (mediaType !== "movie" && mediaType !== "tv") continue;
-    out.push({
-      // id = 纯 tmdb id 字符串（douban-bridge r2 实证：String(e.tmdbId)）
-      id: String(item.id),
+    var card = {
+      // id 必须是【数字】（RexHome rexHomeValidId 要求 number 或纯数字字符串；
+      // rexHomeMatchedCard 用 Number(x.id)）
+      id: Number(item.id),
       type: "tmdb",
-      title: item.title || item.name,
-      description: item.overview,
-      releaseDate: item.release_date || item.first_air_date || "",
-      posterPath: tmdbImage(item.poster_path),
-      backdropPath: tmdbImage(item.backdrop_path),
-      coverUrl: tmdbImage(item.poster_path), // 兜底图位（横图位排在 backdrop 后、竖图位排最后）
-      rating: item.vote_average == null ? undefined : String(item.vote_average), // rating 必须是字符串
       mediaType: mediaType,
+      title: item.title || item.name,
+      posterPath: tmdbImage(item.poster_path),
+      backdropPath: tmdbImage(item.backdrop_path) || undefined,
+      releaseDate: item.release_date || item.first_air_date || undefined,
       genreTitle: genreTitleOf(item.genre_ids),
-    });
+      description: item.overview || "",
+    };
+    // rating 必须是【数字】，四舍五入到 1 位小数（对齐 rexHomeCountedRating）
+    if (item.vote_average != null && item.vote_count != null && item.vote_count >= 20) {
+      card.rating = Math.round(Number(item.vote_average) * 10) / 10;
+    }
+    out.push(card);
   }
   return out;
 }

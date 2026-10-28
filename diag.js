@@ -14,6 +14,7 @@ WidgetMetadata = {
 async function diag(params) {
   var out = [];
   // 1. 硬编码一个真实 tmdb 条目（550 = Fight Club），验证渲染链路（不依赖 Widget.tmdb）
+  // 字段严格对齐 RexHome v151 rexHomeMatchedCard：id=数字、rating=数字、posterPath=相对路径
   out.push({
     id: 550,
     type: "tmdb",
@@ -22,7 +23,7 @@ async function diag(params) {
     posterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
     backdropPath: "/rr7E0NoGKxvbkb89eR1GwfoYjpA.jpg",
     coverUrl: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
-    rating: "8.4",
+    rating: 8.4,
     mediaType: "movie",
   });
 
