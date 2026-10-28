@@ -19,9 +19,10 @@ async function diag(params) {
     type: "tmdb",
     title: "【硬编码】Fight Club（若看到这条，说明 tmdb 渲染链路通）",
     description: "id=550 真实 tmdb id，不依赖 Widget.tmdb 调用",
-    posterPath: "https://image.tmdb.org/t/p/w500/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
-    backdropPath: "https://image.tmdb.org/t/p/w780/rr7E0NoGKxvbkb89eR1GwfoYjpA.jpg",
-    coverUrl: "https://image.tmdb.org/t/p/w500/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+    posterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+    backdropPath: "/rr7E0NoGKxvbkb89eR1GwfoYjpA.jpg",
+    coverUrl: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+    rating: "8.4",
     mediaType: "movie",
   });
 

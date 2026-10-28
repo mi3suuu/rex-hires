@@ -27,7 +27,7 @@ WidgetMetadata = {
   description: "首页片单走 TMDB 片库（最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材），点进即调高清片源(stream)回 CMS 源解析播放地址",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "2.0.1",
+  version: "2.0.2",
   requiredVersion: "0.0.1",
   detailCacheDuration: 60,
   modules: [
@@ -147,20 +147,32 @@ function applySortBy(params, type) {
   else if (params.sort_by === "release_date.asc") params.sort_by = dateField + ".asc";
 }
 
-// 把 TMDB 相对路径海报（/xxx.jpg）拼成完整图床 URL。
-// 关键：Rex 只对官方模块（assets.rexnow.tv）自动拼 TMDB 图床；
-// 第三方模块（GitHub）必须自己返回完整 https 海报 URL，否则海报加载不出。
-// 参照 RexHome 的 rexHomeNativeImage（把 /xxx.jpg → https://image.tmdb.org/t/p/w500/xxx.jpg）。
-function tmdbImage(path, size) {
+// 海报字段处理：Rex 期望 posterPath/backdropPath 传 TMDB 相对路径（/xxx.jpg），
+// 客户端自己拼 image.tmdb.org 图床。不能传完整 URL、也不能传非 TMDB 的路径。
+//
+// 权威证据（能正常显示海报的第三方 widget @rexnow/douban / douban-bridge）：
+//   function r0 = "https://image.tmdb.org/t/p/original"
+//   function r1(e){ return e?.startsWith(r0) ? e.slice(r0.length) : e ?? void 0 }
+//   posterPath: r1(e.images.poster)   ← 把 TMDB 完整 URL 剥离成相对路径 /xxx.jpg
+// 即：Rex 对「所有模块」都自动拼图床，模块侧只需回相对路径（或完整 URL 也行，
+// 但相对路径最稳）。之前「第三方要自己拼完整 URL」的假设是错的，已回退。
+function tmdbImage(path) {
   if (typeof path !== "string") return "";
   var p = path.trim();
   if (!p) return "";
-  if (/^https?:\/\//.test(p)) return p; // 已是完整 URL
-  if (p.charAt(0) === "/") return "https://image.tmdb.org/t/p/" + (size || "w500") + p;
-  return "";
+  // 已是完整 TMDB 图床 URL → 剥离成相对路径（对齐 douban-bridge 的 r1）
+  var prefix = "https://image.tmdb.org/t/p/";
+  if (p.indexOf(prefix) === 0) {
+    var rest = p.slice(prefix.length);
+    var slash = rest.indexOf("/");
+    if (slash >= 0) return rest.slice(slash); // /w500/xxx.jpg → /xxx.jpg
+    return "";
+  }
+  if (p.charAt(0) === "/") return p; // 已是相对路径，原样返回
+  return ""; // 其它完整 URL（豆瓣等非 TMDB）不支持，返回空让 Rex 兜底
 }
 
-// 调 TMDB 接口并把 results 转成 type:"tmdb" 条目（参照 bangumi.fetchData）
+// 调 TMDB 接口并把 results 转成 type:"tmdb" 条目（参照 bangumi.fetchData / douban-bridge r2）
 async function tmdbFetch(api, params, forceMediaType) {
   var response;
   try {
@@ -179,18 +191,17 @@ async function tmdbFetch(api, params, forceMediaType) {
       if (mediaType == null) mediaType = item.title ? "movie" : "tv";
     }
     if (mediaType !== "movie" && mediaType !== "tv") continue;
-    var poster = tmdbImage(item.poster_path, "w500");
-    var backdrop = tmdbImage(item.backdrop_path, "w780");
     out.push({
-      id: item.id,
+      // id = 纯 tmdb id 字符串（douban-bridge r2 实证：String(e.tmdbId)）
+      id: String(item.id),
       type: "tmdb",
       title: item.title || item.name,
       description: item.overview,
       releaseDate: item.release_date || item.first_air_date || "",
-      posterPath: poster,
-      backdropPath: backdrop,
-      coverUrl: poster, // 兜底图位（横图位排在 backdrop 后、竖图位排最后）
-      rating: item.vote_average,
+      posterPath: tmdbImage(item.poster_path),
+      backdropPath: tmdbImage(item.backdrop_path),
+      coverUrl: tmdbImage(item.poster_path), // 兜底图位（横图位排在 backdrop 后、竖图位排最后）
+      rating: item.vote_average == null ? undefined : String(item.vote_average), // rating 必须是字符串
       mediaType: mediaType,
       genreTitle: genreTitleOf(item.genre_ids),
     });
