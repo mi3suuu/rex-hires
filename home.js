@@ -27,7 +27,7 @@ WidgetMetadata = {
   description: "首页片单走 TMDB 片库（最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材），点进即调高清片源(stream)回 CMS 源解析播放地址",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "2.0.0",
+  version: "2.0.1",
   requiredVersion: "0.0.1",
   detailCacheDuration: 60,
   modules: [
@@ -147,6 +147,19 @@ function applySortBy(params, type) {
   else if (params.sort_by === "release_date.asc") params.sort_by = dateField + ".asc";
 }
 
+// 把 TMDB 相对路径海报（/xxx.jpg）拼成完整图床 URL。
+// 关键：Rex 只对官方模块（assets.rexnow.tv）自动拼 TMDB 图床；
+// 第三方模块（GitHub）必须自己返回完整 https 海报 URL，否则海报加载不出。
+// 参照 RexHome 的 rexHomeNativeImage（把 /xxx.jpg → https://image.tmdb.org/t/p/w500/xxx.jpg）。
+function tmdbImage(path, size) {
+  if (typeof path !== "string") return "";
+  var p = path.trim();
+  if (!p) return "";
+  if (/^https?:\/\//.test(p)) return p; // 已是完整 URL
+  if (p.charAt(0) === "/") return "https://image.tmdb.org/t/p/" + (size || "w500") + p;
+  return "";
+}
+
 // 调 TMDB 接口并把 results 转成 type:"tmdb" 条目（参照 bangumi.fetchData）
 async function tmdbFetch(api, params, forceMediaType) {
   var response;
@@ -166,14 +179,17 @@ async function tmdbFetch(api, params, forceMediaType) {
       if (mediaType == null) mediaType = item.title ? "movie" : "tv";
     }
     if (mediaType !== "movie" && mediaType !== "tv") continue;
+    var poster = tmdbImage(item.poster_path, "w500");
+    var backdrop = tmdbImage(item.backdrop_path, "w780");
     out.push({
       id: item.id,
       type: "tmdb",
       title: item.title || item.name,
       description: item.overview,
       releaseDate: item.release_date || item.first_air_date || "",
-      backdropPath: item.backdrop_path,
-      posterPath: item.poster_path,
+      posterPath: poster,
+      backdropPath: backdrop,
+      coverUrl: poster, // 兜底图位（横图位排在 backdrop 后、竖图位排最后）
       rating: item.vote_average,
       mediaType: mediaType,
       genreTitle: genreTitleOf(item.genre_ids),
