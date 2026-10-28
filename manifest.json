@@ -5,8 +5,8 @@
     {
       "id": "app.mi3s.homes",
       "title": "高清片源聚合",
-      "version": "1.0.0",
-      "description": "聚合 28 个 CMS 源的首页片单：最新更新、热播榜、分类及二级题材",
+      "version": "2.0.0",
+      "description": "首页片单走 TMDB 片库：最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材，点进即调高清片源回 CMS 源解析播放地址",
       "author": "mi3s",
       "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/home.js"
     },
