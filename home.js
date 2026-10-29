@@ -1,23 +1,15 @@
 // ============================================================================
-// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v7.0.0
+// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v8.0.0
 // ----------------------------------------------------------------------------
-// ★ 数据源走 Rex 官方发现服务（与官方「AI 搜索」同源）：
-//   - 请求：Widget.http.post 到 https://api.rexnow.tv/api/discovery/ai-search/search
-//   - 返回：后端 data.data 的条目
+// ★ 数据源：Rex 官方发现服务（与官方「AI 搜索」同源）
+//   Widget.http.post 到 https://api.rexnow.tv/api/discovery/ai-search/search
 //
-// ★★ 真正根因（v7.0.0，反复空白 6 个版本的最终定位）：
-//   第三方模块（isOfficial=false）的入口函数【必须用「全局赋值」形式暴露】，
-//   即 `latest = async function(params){...}`，不能用 `async function latest(){}`
-//   函数声明，也不能用 `export`。
-//   决定性证据：官方 SDK 仓库 baranwang/rex-widget-libs 的脚手架模板
-//   examples/rslib-plugin/src/index.ts 里就是 `testFunction = async (params)=>{...}`；
-//   唯一能正常显示的第三方视频模块 @rexnow/douban（豆瓣榜单）的产物也是
-//   `loadDefaultCatalog = ...` 全局赋值。官方「AI 搜索」能用函数声明，是因为它走
-//   isOfficial=true 的 bundledOfficialData 特殊加载路径。
-//
-// ★ 条目字段对齐 @rexnow/douban（实测可显示的第三方 video 模块）：
-//   type:"tmdb"（走内置详情页，自动拿 TMDB 详情/图片，第三方也支持）、
-//   posterPath/backdropPath 传 TMDB 相对路径 /xxx.jpg、id/rating 字符串化。
+// ★★ 本版根因修正（v8.0.0）：照抄唯一「实机海报显示正常」的第三方模块
+//   ZurlyQin/rex-widgets 的 TMDB 电影精选（README 实测验证），它用的是：
+//     1. `async function xxx(params){}` 函数声明（非全局赋值）
+//     2. 数字 id、数字 rating（Number(...) || 0，不字符串化）
+//     3. type:"tmdb"、posterPath/backdropPath 传 TMDB 相对路径 /xxx.jpg
+//   之前 v5「字符串化」/ v6「type=url」/ v7「全局赋值」三个结论均被该成品推翻。
 //
 // ★ 限流说明：该后端连续 ~16 次请求返回 429，列表入口统一 cacheDuration=3600。
 //
@@ -29,7 +21,7 @@ var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
 WidgetMetadata = {
   id: "app.mi3s.homes",
   title: "高清片源聚合",
-  version: "7.0.0",
+  version: "8.0.0",
   requiredVersion: "0.0.1",
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
@@ -131,28 +123,27 @@ WidgetMetadata = {
 };
 
 // 把后端条目规范成 Rex 渲染层可稳定解析的 VideoItem。
-// 对齐 @rexnow/douban（实测可显示的第三方 video 模块）：
-//   id/rating 字符串化，type 用 "tmdb"（走内置详情页），posterPath/backdropPath
-//   传 TMDB 相对路径（/xxx.jpg）。第三方模块的 type:"tmdb" 是支持的（douban 即证）。
-normalizeItem = function (it) {
+// 对齐 ZurlyQin/rex-widgets 的 videoItem（实机海报显示正常）：
+//   数字 id、数字 rating（Number()||0）、type:"tmdb"、posterPath/backdropPath
+//   传 TMDB 相对路径 /xxx.jpg、mediaType:"movie"。
+function normalizeItem(it) {
   if (!it) return null;
-  var rating = it.rating;
+  var rating = Number(it.rating);
   return {
-    id: String(it.id != null ? it.id : ""),
+    id: Number(it.id != null ? it.id : 0),
     type: it.type || "tmdb",
+    mediaType: it.mediaType || "movie",
     title: it.title || "",
     description: it.description || "",
-    releaseDate: it.releaseDate || "",
     posterPath: it.posterPath || "",
     backdropPath: it.backdropPath || "",
-    mediaType: it.mediaType || "movie",
-    rating: (rating == null || rating === "") ? undefined : String(rating),
-    genreTitle: it.genreTitle || "",
+    releaseDate: it.releaseDate || "",
+    rating: isFinite(rating) ? rating : 0
   };
-};
+}
 
 // 调 Rex 官方发现服务，返回后端生成的条目（照抄 rex.nlsearch 的 nlSearch）
-aiDiscover = async function (query, params) {
+async function aiDiscover(query, params) {
   var language = (params && params.language) || "zh-CN";
   var userId = (params && params.userId) || "";
   try {
@@ -176,15 +167,15 @@ aiDiscover = async function (query, params) {
     console.error("[高清片源] 请求失败:", error && error.message ? error.message : error);
     throw new Error("片单服务暂时不可用，请稍后再试");
   }
-};
+}
 
-latest = async function (params) {
+async function latest(params) {
   return await aiDiscover("最新上映的电影和剧集", params);
-};
+}
 
-hot = async function (params) {
+async function hot(params) {
   return await aiDiscover("本周热播的电影和剧集", params);
-};
+}
 
 var CATEGORY_QUERY = {
   movie: "热门电影",
@@ -194,10 +185,10 @@ var CATEGORY_QUERY = {
   documentary: "热门纪录片",
 };
 
-category = async function (params) {
+async function category(params) {
   var type = (params && params.type) || "movie";
   return await aiDiscover(CATEGORY_QUERY[type] || "热门电影", params);
-};
+}
 
 var GENRE_QUERY = {
   action: "动作电影",
@@ -213,13 +204,13 @@ var GENRE_QUERY = {
   fantasy: "奇幻电影",
 };
 
-genre = async function (params) {
+async function genre(params) {
   var g = (params && params.genre) || "action";
   return await aiDiscover(GENRE_QUERY[g] || "动作电影", params);
-};
+}
 
-search = async function (params) {
+async function search(params) {
   var keyword = ((params && (params.keyword || params.query)) || "").trim();
   if (!keyword) throw new Error("请输入片名或描述");
   return await aiDiscover(keyword, params);
-};
+}
