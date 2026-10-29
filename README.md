@@ -6,9 +6,9 @@
 
 | 模块 | id | 类型 | 说明 |
 |------|----|------|------|
-| 高清片源聚合 | `app.mi3s.homes` | video | 首页片单走 TMDB 片库：最新更新 / 热播榜 / 分类 / 题材 |
+| 高清片源聚合 | `app.mi3s.homes` | video | 片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片 |
 | 高清片源 | `app.mi3s.hires` | stream | 28 个苹果CMS源 + 6 个直播源 + 测试片直链，按片名解析真实 m3u8 |
-| 诊断 | `app.mi3s.diag` | video | 自检 `type:tmdb` 渲染链路（固定 Fight Club + 实时 trending），排查"列表空白"用 |
+| 诊断 | `app.mi3s.diag` | video | 对比「后端取片」（照抄 AI 搜索）vs「TMDB 取片」，定位列表空白根因 |
 | 4KVM 播放源 | `hyj1817.4kvm.resource` | stream | 4KVM 影视 HLS 播放源（开源） |
 | 苹果CMS 聚合源 | `hyj1817.maccms.resource` | stream | 通用苹果CMS聚合，可配站点/翻页/季匹配（开源） |
 | 4K 聚合源 | `app.mi3s.k4sources` | stream | 100 个苹果CMS影视源多源聚合，优先4K/蓝光线路 |
@@ -16,40 +16,47 @@
 ## 远程订阅地址（统一走 jsDelivr，国内可直连）
 
 ```
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/home.js        # 首页片单 video
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/hires.js       # 播放源 stream
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/diag.js        # 诊断 video
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/4k-sources.js  # 4K 聚合 stream
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/home.js        # 首页片单 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/hires.js       # 播放源 stream
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/diag.js        # 诊断 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/4k-sources.js  # 4K 聚合 stream
 ```
 
 > `raw.githubusercontent.com` 国内基本被墙，直接添加会报「无法识别的模块数据」，务必用 jsDelivr。
-> 更新后如需立即生效，可访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@main/home.js` 刷新 CDN。
+> 统一用不可变 tag `@v4.0.0`（`@main` 有 12h/7d 强缓存，改了代码不生效）。
+> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/home.js` 刷新 CDN。
 
-## ★ 关键契约：id 与 rating 必须是**字符串**
+## ★ 根因与最终实现（v4.0.0）
 
-`type:"tmdb"` 条目要能被客户端渲染成海报，字段必须严格按官方类型定义
-[`@rexnow/libs` video.ts](https://github.com/baranwang/rex-widget-libs/blob/main/packages/libs/src/env/video.ts) 的 `VideoItem`：
+「列表空白 / 没有更多了」的**真正根因不是字段格式**，而是 `Widget.tmdb` 在真实渲染环境
+（资源库/首页）对第三方模块不可用——它在「调试」环境能返回数据，但渲染环境拿不到，
+导致列表空。
 
-```ts
-id: string            // ← 字符串！TMDB 场景为纯数字串 "550"（不要写数字 550）
-type: 'tmdb'
-title: string
-posterPath?: string   // ← TMDB 相对路径 "/xxx.jpg"，客户端自己拼 image.tmdb.org
-backdropPath?: string
-mediaType?: 'tv'|'movie'
-rating?: string       // ← 字符串！"8.4"（不要写数字 8.4）
+用户设备上唯一确认能正常显示的是官方「AI 搜索」模块（`rex.nlsearch`），它走的是
+**Rex 官方发现后端**，而不是 `Widget.tmdb`：
+
+```js
+// 与 AI 搜索逐字节同构
+const response = await Widget.http.post(
+  "https://api.rexnow.tv/api/discovery/ai-search/search",
+  { query: "热门电影", userId: "", language: "zh-CN" },
+  { headers: { "Content-Type": "application/json" } }
+);
+const data = response.data;
+if (!data || !data.success) throw new Error((data && data.message) || "搜索失败");
+return data.data || [];   // 条目由后端生成，客户端必然能渲染
 ```
 
-**回传数字的后果**：Swift 端 `as? String` 强转失败 → 条目被判无效 → 整个列表空白，
-界面表现为「没有更多了」。这是 v2.3.0 及以前一直"显示空"的真正根因。
+后端返回的条目字段：`id`(数字)、`type:"tmdb"`、`title`、`posterPath`(相对路径 `/xxx.jpg`)、
+`backdropPath`、`mediaType:"movie"|"tv"`、`rating`(数字)、`genreTitle`(`" / "` 分隔)。
+**这套格式就是 AI 搜索的格式**，`home.js` 原样透传，因此渲染行为与 AI 搜索一致。
 
-> 网上流传的官方 `rex-tmdb.js` 明文源码里写的是 `id: item.id`（数字），那是官方模块
-> 被客户端特判兜底的旧写法；**第三方模块照抄会失败**。可对照作者本人的成品模块
-> [douban-bridge](https://www.npmjs.com/package/@rexnow/douban) 的 `r2()`：
-> `id: String(tmdbId)`、`rating: String(e.rating)`、`posterPath` 为剥掉图床前缀的相对路径。
+> 之前误以为「`id`/`rating` 必须是字符串」（来自 `@rexnow/libs` 的 TS 类型声明），
+> 那是类型声明 ≠ 渲染契约的误导。实际客户端对后端下发的数字 id/rating 完全能渲染
+> （AI 搜索就是证据）。第三方模块的稳妥做法就是：**别自己拼 TMDB，直接调官方发现后端**。
 
-可以用自带诊断模块快速验证：安装 `diag.js` → 资源库点「诊断」→ 能看到 Fight Club 海报，
-说明渲染链路通；仍是空白则说明问题不在字段，而在模块加载/网络。
+诊断模块 `diag.js` 提供双入口对照：① 后端取片（照抄 AI 搜索）② TMDB 取片（旧方案）。
+哪个入口有内容，就证明哪种数据源在真实渲染环境可用。
 
 ## 两种模块类型的区别
 

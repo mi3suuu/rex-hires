@@ -22,7 +22,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JS_PATH = os.path.join(HERE, "home.js")
-CDN_URL = "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v3.0.0/home.js"
+CDN_URL = "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/home.js"
 WIDGET_ID = "app.mi3s.homes"
 WIDGET_NAME = "高清片源聚合"
 STAMP = (2026, 10, 29, 0, 0, 0)
