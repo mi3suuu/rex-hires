@@ -35,6 +35,7 @@ WidgetMetadata = {
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
+        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
@@ -45,6 +46,7 @@ WidgetMetadata = {
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
+        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
@@ -68,6 +70,7 @@ WidgetMetadata = {
         },
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
+        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
@@ -97,6 +100,7 @@ WidgetMetadata = {
         },
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
+        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
