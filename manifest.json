@@ -1,12 +1,12 @@
 {
   "title": "Rex 播放源合集（video + stream）",
-  "description": "高清播放源模块合集：首页聚合片单（video）+ 播放源解析（stream）。点进影片即出播放地址。全部走 jsDelivr CDN（国内可直连，避免 raw.githubusercontent.com 被墙）。",
+  "description": "高清播放源模块合集：首页聚合片单（video）+ 播放源解析（stream）。点进影片即出播放地址。全部走 jsDelivr CDN。★ video 模块 id 必须以 rex. 开头，否则列表永远空白。",
   "widgets": [
     {
-      "id": "app.mi3s.homes",
+      "id": "rex.mi3s.homes",
       "title": "高清片源聚合",
-      "version": "8.0.0",
-      "description": "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，条目格式照抄实机验证过海报的 ZurlyQin TMDB 模块，点进即调高清片源回 CMS 源解析播放地址",
+      "version": "10.0.0",
+      "description": "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址。★ v10.0.0 修正：Rex 只渲染 rex. 前缀的 video 模块，故 id 由 app.mi3s.homes 改为 rex.mi3s.homes",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/home.js"
     },
@@ -19,7 +19,7 @@
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/hires.js"
     },
     {
-      "id": "app.mi3s.diag",
+      "id": "rex.mi3s.diag",
       "title": "诊断 8.0.0",
       "version": "8.0.0",
       "description": "26 种可行写法对照：A函数形式 / B type取值 / C id类型 / D 图片格式 / E 字段 / F 网络源，逐个点开看哪个出海报",

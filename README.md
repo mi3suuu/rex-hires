@@ -6,9 +6,9 @@
 
 | 模块 | id | 类型 | 说明 |
 |------|----|------|------|
-| 高清片源聚合 | `app.mi3s.homes` | video | 片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片 |
+| 高清片源聚合 | `rex.mi3s.homes` | video | 片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片 |
 | 高清片源 | `app.mi3s.hires` | stream | 28 个苹果CMS源 + 6 个直播源 + 测试片直链，按片名解析真实 m3u8 |
-| 诊断 | `app.mi3s.diag` | video | 对比「后端取片」（照抄 AI 搜索）vs「TMDB 取片」，定位列表空白根因 |
+| 诊断 | `rex.mi3s.diag` | video | 对比「后端取片」（照抄 AI 搜索）vs「TMDB 取片」，定位列表空白根因 |
 | 4KVM 播放源 | `hyj1817.4kvm.resource` | stream | 4KVM 影视 HLS 播放源（开源） |
 | 苹果CMS 聚合源 | `hyj1817.maccms.resource` | stream | 通用苹果CMS聚合，可配站点/翻页/季匹配（开源） |
 | 4K 聚合源 | `app.mi3s.k4sources` | stream | 100 个苹果CMS影视源多源聚合，优先4K/蓝光线路 |
@@ -36,7 +36,39 @@ https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/4k-sources.js  # 4K 聚合 st
 > 清不掉（实测 purge 无效），会导致「刷新了还是旧代码」。
 > 我每次更新后会调 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@main/xxx` 清缓存，你点刷新即生效。
 
-## ★ 根因与最终实现（v8.0.0）
+## ★★★ 真正的根因（v10.0.0，2026-10-29 在 iOS 27.1 模拟器内逐项实测确认）
+
+**Rex 只给 widget id 以 `rex.` 开头的模块构建 video 显示模型。**
+
+用 `app.` 前缀的模块：脚本能加载、元数据能正常解析（`type:"video"` 由 Rex 自动补）、
+调试面板点「Test / Debug this function」能成功返回 N 条并打印出完整字段，
+但「预览」和「资源库」**永远空白 / 只显示「没有更多了」**——
+因为显示模型那一层根本不为它生成条目。这就是「调试有数据、预览空白」挂了十几个版本的真正原因。
+
+实测四组，**只有 widget id 不同，其余逐字相同**：
+
+| 文件 | widget id | 资源库结果 |
+|------|-----------|-----------|
+| `t1.js` | `rex.mi3s.homes` | 正常出海报 ✅ |
+| `mirror.js`（ZurlyQin 原版） | `rex.tmdb.mi3smirror` | 正常出海报 ✅ |
+| `t3.js` | `app.mi3s.t3` | 预览 "No more items" ❌ |
+| `t4.js` = t3 仅改 id | `rex.mi3s.t3` | **立刻正常出海报** ✅ |
+| 官方 4 个模块 | `rex.tmdb` / `rex.bangumi` / `rex.nlsearch` / `rex.danmu` | 正常 ✅ |
+
+→ 所以 `home.js` v10.0.0 的 id 从 `app.mi3s.homes` 改成 `rex.mi3s.homes`。
+⚠️ **改 id 等于新建模块**：导入新版后资源库里会同时出现两个「高清片源聚合」，把旧的 v9.0.0 删掉即可。
+
+补充结论：
+- 该前缀规则**只作用于 video 显示层**。`stream` 模块（`hires.js`，id 仍是 `app.mi3s.hires`）实测完全正常，
+  详情页能列出非凡资源等线路，不需要改。
+- AI 后端 `ai-search/search` 对少数 query 会返回 `posterPath` 为空的条目（实测「最新上映的电影和剧集」
+  首条是一条俄语片、海报字段为空），会渲染成白框 → v10 起过滤掉无海报条目，整批都没海报才回退全部。
+
+---
+
+## 曾经的推演过程（v8.0.0，结论已被 v10 修正）
+
+
 
 数据源走 Rex 官方发现后端（与 AI 搜索 `rex.nlsearch` 同源），这一点没错。反复「列表空白 / 没有更多」
 的定位，最终落在**唯一有「实机海报显示正常」确证的第三方模块**上：

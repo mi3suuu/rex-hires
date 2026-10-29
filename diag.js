@@ -11,7 +11,7 @@
 // 结论：哪个能出海报，就把那个维度的写法套用到 home.js。
 
 WidgetMetadata = {
-  "id": "app.mi3s.diag",
+  "id": "rex.mi3s.diag",
   "title": "诊断 8.0.0",
   "version": "8.0.0",
   "requiredVersion": "0.0.1",
