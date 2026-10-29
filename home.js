@@ -24,7 +24,7 @@ var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
 WidgetMetadata = {
   id: "app.mi3s.homes",
   title: "高清片源聚合",
-  version: "8.2.0",
+  version: "9.0.0",
   requiredVersion: "0.0.1",
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
@@ -39,7 +39,6 @@ WidgetMetadata = {
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
-        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
@@ -50,7 +49,6 @@ WidgetMetadata = {
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
-        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
@@ -74,7 +72,6 @@ WidgetMetadata = {
         },
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
-        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
@@ -104,7 +101,6 @@ WidgetMetadata = {
         },
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
-        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
@@ -162,25 +158,36 @@ WidgetMetadata = {
   },
 };
 
-// 把后端条目规范成 Rex 渲染层可稳定解析的 VideoItem。
-// ★ 第三方模块（isOfficial=false）的条目会被客户端 zod 校验：id/rating 必须是【字符串】
-//   （@rexnow/libs schema：id: z.string()、rating: z.string()）。
-//   官方 rex-tmdb 用数字 id/rating 能显示，是因为 isOfficial=true 走特权路径不校验；
-//   第三方照抄数字会被丢弃 → 列表空白。douban（实测显示）就是 String(id)/String(rating)。
-function normalizeItem(it) {
-  if (!it) return null;
-  var rating = it.rating;
-  return {
-    id: String(it.id != null ? it.id : ""),
-    type: it.type || "tmdb",
-    mediaType: it.mediaType || "movie",
-    title: it.title || "",
-    description: it.description || "",
-    posterPath: String(it.posterPath || "").trim(),
-    backdropPath: String(it.backdropPath || "").trim(),
-    releaseDate: it.releaseDate || "",
-    rating: (rating == null || rating === "") ? undefined : String(rating)
-  };
+// ============================================================================
+// ★★★ v9.0.0 关键修正：不再自己重建条目对象 ★★★
+//
+// 对照官方 nlsearch.js（「AI 搜索」，实测有内容）逐字比对后，发现它只有三步：
+//     1. 视频列表入口【没有 page 参数】
+//     2. functionName 与 module id 可以不同（aiDiscover → nlSearch）
+//     3. return data.data —— 原样透传，一个字段都不改
+//
+// 而本模块 v8.x 恰恰在最后一步把每条 item 重建成只有 10 个字段的新对象，
+// 把后端原本携带的海报字段（coverUrl / posterURL / detailPoster 之类）整批丢掉，
+// 结果就是「调用成功 N 条，但列表空、没海报」。
+//
+// 所以 v9.0.0 起：raw 原样返回，必要时只做一次浅拷贝以便补字段，绝不裁字段。
+// ============================================================================
+function passthrough(items) {
+  if (!items || !items.length) return [];
+  var out = [];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it || typeof it !== "object") continue;
+    var copy = {};
+    for (var k in it) copy[k] = it[k];
+    // 仅在缺 id / title 时补，绝不覆盖后端已有值
+    if (copy.id == null) copy.id = String(i);
+    if (!copy.title) copy.title = copy.name || copy.originalTitle || copy.original_title || "";
+    if (!copy.type) copy.type = "tmdb";
+    if (!copy.mediaType) copy.mediaType = copy.media_type || (copy.firstAirDate || copy.first_air_date ? "tv" : "movie");
+    out.push(copy);
+  }
+  return out;
 }
 
 // 调 Rex 官方发现服务，返回后端生成的条目（照抄 rex.nlsearch 的 nlSearch）
@@ -198,12 +205,11 @@ async function aiDiscover(query, params) {
       throw new Error((data && data.message) || "搜索失败");
     }
     var items = data.data || [];
-    var out = [];
-    for (var i = 0; i < items.length; i++) {
-      var n = normalizeItem(items[i]);
-      if (n) out.push(n);
-    }
-    return out;
+    try {
+      console.log("[高清片源] " + query + " 返回 " + items.length + " 条");
+      if (items[0]) console.log("[高清片源] 首条原始字段 = " + JSON.stringify(Object.keys(items[0])) + " ; 首条 = " + JSON.stringify(items[0]).slice(0, 600));
+    } catch (e0) { console.error("[高清片源] 日志异常 " + e0); }
+    return passthrough(items);
   } catch (error) {
     console.error("[高清片源] 请求失败:", error && error.message ? error.message : error);
     throw new Error("片单服务暂时不可用，请稍后再试");
