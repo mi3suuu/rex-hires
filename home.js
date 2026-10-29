@@ -155,14 +155,15 @@ WidgetMetadata = {
 };
 
 // 把后端条目规范成 Rex 渲染层可稳定解析的 VideoItem。
-// 对齐 ZurlyQin/rex-widgets 的 videoItem（实机海报显示正常）：
-//   数字 id、数字 rating（Number()||0）、type:"tmdb"、posterPath/backdropPath
-//   传 TMDB 相对路径 /xxx.jpg、mediaType:"movie"。
+// ★ 第三方模块（isOfficial=false）的条目会被客户端 zod 校验：id/rating 必须是【字符串】
+//   （@rexnow/libs schema：id: z.string()、rating: z.string()）。
+//   官方 rex-tmdb 用数字 id/rating 能显示，是因为 isOfficial=true 走特权路径不校验；
+//   第三方照抄数字会被丢弃 → 列表空白。douban（实测显示）就是 String(id)/String(rating)。
 function normalizeItem(it) {
   if (!it) return null;
-  var rating = Number(it.rating);
+  var rating = it.rating;
   return {
-    id: Number(it.id != null ? it.id : 0),
+    id: String(it.id != null ? it.id : ""),
     type: it.type || "tmdb",
     mediaType: it.mediaType || "movie",
     title: it.title || "",
@@ -170,7 +171,7 @@ function normalizeItem(it) {
     posterPath: it.posterPath || "",
     backdropPath: it.backdropPath || "",
     releaseDate: it.releaseDate || "",
-    rating: isFinite(rating) ? rating : 0
+    rating: (rating == null || rating === "") ? undefined : String(rating)
   };
 }
 
@@ -299,14 +300,14 @@ async function official(params) {
     var mt = board === "trending" ? (item.media_type || (item.title ? "movie" : "tv")) : type;
     if (mt !== "movie" && mt !== "tv") continue;
     data.push({
-      id: item.id,
+      id: String(item.id),
       type: "tmdb",
       title: item.title || item.name || "",
       description: item.overview || "",
       releaseDate: item.release_date || item.first_air_date || "",
       backdropPath: item.backdrop_path || "",
       posterPath: item.poster_path || "",
-      rating: item.vote_average || 0,
+      rating: item.vote_average == null ? undefined : String(item.vote_average),
       mediaType: mt,
       genreTitle: genreTitleWith(item.genre_ids),
     });
