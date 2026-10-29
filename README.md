@@ -16,16 +16,16 @@
 ## 远程订阅地址（统一走 jsDelivr，国内可直连）
 
 ```
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v8.0.0/home.js        # 首页片单 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/home.js        # 首页片单 video
 https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/hires.js       # 播放源 stream
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v8.0.0/diag.js        # 诊断 video（26 种写法对照）
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/diag.js        # 诊断 video（26 种写法对照）
 https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/4k-sources.js  # 4K 聚合 stream
 ```
 
 > `raw.githubusercontent.com` 国内基本被墙，直接添加会报「无法识别的模块数据」，务必用 jsDelivr。
-> 统一用不可变 tag（`@main` 有 12h/7d 强缓存，改了代码不生效）：`home.js`/`diag.js` 用 `@v8.0.0`，
+> 统一用不可变 tag（`@main` 有 12h/7d 强缓存，改了代码不生效）：`home.js`/`diag.js` 用 `@v7.0.0`，
 > `hires.js`/`4k-sources.js`（stream 模块未变）用 `@v5.0.0`。
-> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v8.0.0/home.js` 刷新 CDN。
+> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/home.js` 刷新 CDN。
 
 ## ★ 根因与最终实现（v8.0.0）
 
