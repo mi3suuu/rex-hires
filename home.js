@@ -11,7 +11,10 @@
 //     3. type:"tmdb"、posterPath/backdropPath 传 TMDB 相对路径 /xxx.jpg
 //   之前 v5「字符串化」/ v6「type=url」/ v7「全局赋值」三个结论均被该成品推翻。
 //
-// ★ 限流说明：该后端连续 ~16 次请求返回 429，列表入口统一 cacheDuration=3600。
+// ★ 限流说明：该后端连续 ~16 次请求返回 429。
+//   v8.2.0：cacheDuration 3600 → 120。原因：首次拉取若失败，空数组会被缓存一小时，
+//   期间「预览」恒空而「调试」正常（调试绕过缓存）—— 正是本模块长期「调试有数据、预览空白」的形态。
+//   120 秒既不会把失败钉死一小时，又远低于触发 429 的请求密度。
 //
 // 播放链路：点进条目后，Rex 调 stream 模块（app.mi3s.hires）按 title 回 CMS 源。
 // ============================================================================
@@ -21,7 +24,7 @@ var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
 WidgetMetadata = {
   id: "app.mi3s.homes",
   title: "高清片源聚合",
-  version: "8.0.0",
+  version: "8.2.0",
   requiredVersion: "0.0.1",
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
@@ -32,7 +35,7 @@ WidgetMetadata = {
       id: "latest",
       title: "最新更新",
       functionName: "latest",
-      cacheDuration: 3600,
+      cacheDuration: 120,
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
@@ -43,7 +46,7 @@ WidgetMetadata = {
       id: "hot",
       title: "热播榜",
       functionName: "hot",
-      cacheDuration: 3600,
+      cacheDuration: 120,
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
@@ -54,7 +57,7 @@ WidgetMetadata = {
       id: "category",
       title: "分类",
       functionName: "category",
-      cacheDuration: 3600,
+      cacheDuration: 120,
       params: [
         {
           name: "type",
@@ -78,7 +81,7 @@ WidgetMetadata = {
       id: "genre",
       title: "题材",
       functionName: "genre",
-      cacheDuration: 3600,
+      cacheDuration: 120,
       params: [
         {
           name: "genre",
@@ -108,7 +111,7 @@ WidgetMetadata = {
       id: "official",
       title: "官方TMDB同款",
       functionName: "official",
-      cacheDuration: 3600,
+      cacheDuration: 120,
       params: [
         {
           name: "board",
@@ -305,14 +308,14 @@ async function official(params) {
     var mt = board === "trending" ? (item.media_type || (item.title ? "movie" : "tv")) : type;
     if (mt !== "movie" && mt !== "tv") continue;
     data.push({
-      id: String(item.id),
+      id: item.id,
       type: "tmdb",
       title: item.title || item.name || "",
       description: item.overview || "",
       releaseDate: item.release_date || item.first_air_date || "",
       backdropPath: String(item.backdrop_path || "").trim(),
       posterPath: String(item.poster_path || "").trim(),
-      rating: item.vote_average == null ? undefined : String(item.vote_average),
+      rating: Number(item.vote_average) || 0,
       mediaType: mt,
       genreTitle: genreTitleWith(item.genre_ids),
     });
