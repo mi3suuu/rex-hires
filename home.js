@@ -1,13 +1,17 @@
 // ============================================================================
-// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v4.0.0
+// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v4.1.0
 // ----------------------------------------------------------------------------
 // ★ 实现方式完全复刻官方「AI 搜索」模块（rex.nlsearch），因为它是用户设备上
-//   唯一确认能正常显示的模块：
+//   唯一确认能正常显示的模块（依据官方 ForwardWidgets 文档 + 实机对照）：
 //   - 数据源：走 Rex 官方后端 https://api.rexnow.tv/api/discovery/ai-search/search
 //   - 请求：Widget.http.post（与 AI 搜索逐字节一致）
 //   - 返回：后端 data.data（条目由 Rex 后端生成，客户端必然能渲染）
 //   不再依赖 Widget.tmdb（它在「调试」环境可用、但在资源库/首页渲染环境对
-//   第三方模块疑似不可用，导致列表空白）。
+//   第三方模块不可用，导致列表空白 —— v2.3~v3.0 反复空的根因）。
+//
+// ★ 限流说明（v4.1.0）：该后端对同一来源有速率限制（实测连续 ~16 次返回 429），
+//   因此 4 个列表入口统一 cacheDuration=3600（官方默认），1 小时内同一入口不
+//   重复请求；正常使用（首页 4 行海报 = 4 次请求）远低于限流阈值。
 //
 // 播放链路：点进条目后，Rex 把片名传给 stream 模块（app.mi3s.hires）回 CMS 源。
 // ============================================================================
@@ -17,7 +21,7 @@ var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
 WidgetMetadata = {
   id: "app.mi3s.homes",
   title: "高清片源聚合",
-  version: "4.0.0",
+  version: "4.1.0",
   requiredVersion: "0.0.1",
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
@@ -27,7 +31,7 @@ WidgetMetadata = {
       id: "latest",
       title: "最新更新",
       functionName: "latest",
-      cacheDuration: 600,
+      cacheDuration: 3600,
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
@@ -37,7 +41,7 @@ WidgetMetadata = {
       id: "hot",
       title: "热播榜",
       functionName: "hot",
-      cacheDuration: 600,
+      cacheDuration: 3600,
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
@@ -47,7 +51,7 @@ WidgetMetadata = {
       id: "category",
       title: "分类",
       functionName: "category",
-      cacheDuration: 600,
+      cacheDuration: 3600,
       params: [
         {
           name: "type",
@@ -70,7 +74,7 @@ WidgetMetadata = {
       id: "genre",
       title: "题材",
       functionName: "genre",
-      cacheDuration: 600,
+      cacheDuration: 3600,
       params: [
         {
           name: "genre",

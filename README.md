@@ -16,17 +16,17 @@
 ## 远程订阅地址（统一走 jsDelivr，国内可直连）
 
 ```
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/home.js        # 首页片单 video
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/hires.js       # 播放源 stream
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/diag.js        # 诊断 video
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/4k-sources.js  # 4K 聚合 stream
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/home.js        # 首页片单 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/hires.js       # 播放源 stream
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/diag.js        # 诊断 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/4k-sources.js  # 4K 聚合 stream
 ```
 
 > `raw.githubusercontent.com` 国内基本被墙，直接添加会报「无法识别的模块数据」，务必用 jsDelivr。
-> 统一用不可变 tag `@v4.0.0`（`@main` 有 12h/7d 强缓存，改了代码不生效）。
-> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v4.0.0/home.js` 刷新 CDN。
+> 统一用不可变 tag `@v4.1.0`（`@main` 有 12h/7d 强缓存，改了代码不生效）。
+> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/home.js` 刷新 CDN。
 
-## ★ 根因与最终实现（v4.0.0）
+## ★ 根因与最终实现（v4.1.0）
 
 「列表空白 / 没有更多了」的**真正根因不是字段格式**，而是 `Widget.tmdb` 在真实渲染环境
 （资源库/首页）对第三方模块不可用——它在「调试」环境能返回数据，但渲染环境拿不到，
@@ -57,6 +57,15 @@ return data.data || [];   // 条目由后端生成，客户端必然能渲染
 
 诊断模块 `diag.js` 提供双入口对照：① 后端取片（照抄 AI 搜索）② TMDB 取片（旧方案）。
 哪个入口有内容，就证明哪种数据源在真实渲染环境可用。
+
+### ⚠️ 后端限流（v4.1.0 已处理）
+
+实测该发现后端对同一来源有速率限制：**连续约 16 次请求后返回 HTTP 429**。
+因此 4 个列表入口统一 `cacheDuration: 3600`（官方默认），1 小时内同一入口不重复请求；
+正常使用（首页 4 行海报 = 4 次请求）远低于阈值，不会触发限流。
+
+> 备选数据源 `assets.vvebo.vip/scripts/datas/latest_*.json`（Forward 静态 JSON）实测
+> 国内连通率仅 50~60%，不稳定，故不采用；`Widget.tmdb` 第三方不可用；二者均已排除。
 
 ## 两种模块类型的区别
 
