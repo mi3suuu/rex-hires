@@ -1,5 +1,5 @@
 // ============================================================================
-// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v4.1.0
+// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v5.0.0
 // ----------------------------------------------------------------------------
 // ★ 实现方式完全复刻官方「AI 搜索」模块（rex.nlsearch），因为它是用户设备上
 //   唯一确认能正常显示的模块（依据官方 ForwardWidgets 文档 + 实机对照）：
@@ -21,7 +21,7 @@ var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
 WidgetMetadata = {
   id: "app.mi3s.homes",
   title: "高清片源聚合",
-  version: "4.1.0",
+  version: "5.0.0",
   requiredVersion: "0.0.1",
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
@@ -122,6 +122,29 @@ WidgetMetadata = {
   },
 };
 
+// 把后端条目规范成 Rex 渲染层可稳定解析的 VideoItem。
+// 关键（v5.0.0）：id / rating 必须转成「字符串」，不能透传后端的数字。
+// 依据：唯一确认能工作的第三方模块 douban-bridge 就是 `id: String(tmdbId)`、
+//       `rating: String(...)`；官方 ForwardWidgets 文档的返回模型里 id 写作
+//       "tv.123" / "movie.234"、rating 写作 "5"（都是字符串）。第三方模块的条目
+//       走 Swift Codable 解码，数字 id 会解析失败导致整批条目被丢弃 → 列表空白。
+function normalizeItem(it) {
+  if (!it) return null;
+  var rating = it.rating;
+  return {
+    id: String(it.id != null ? it.id : ""),
+    type: it.type || "tmdb",
+    title: it.title || "",
+    description: it.description || "",
+    releaseDate: it.releaseDate || "",
+    posterPath: it.posterPath || "",
+    backdropPath: it.backdropPath || "",
+    mediaType: it.mediaType || "movie",
+    rating: (rating == null || rating === "") ? undefined : String(rating),
+    genreTitle: it.genreTitle || "",
+  };
+}
+
 // 调 Rex 官方发现服务，返回后端生成的条目（照抄 rex.nlsearch 的 nlSearch）
 async function aiDiscover(query, params) {
   var language = (params && params.language) || "zh-CN";
@@ -136,7 +159,13 @@ async function aiDiscover(query, params) {
     if (!data || !data.success) {
       throw new Error((data && data.message) || "搜索失败");
     }
-    return data.data || [];
+    var items = data.data || [];
+    var out = [];
+    for (var i = 0; i < items.length; i++) {
+      var n = normalizeItem(items[i]);
+      if (n) out.push(n);
+    }
+    return out;
   } catch (error) {
     console.error("[高清片源] 请求失败:", error && error.message ? error.message : error);
     throw new Error("片单服务暂时不可用，请稍后再试");

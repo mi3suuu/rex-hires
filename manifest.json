@@ -5,10 +5,10 @@
     {
       "id": "app.mi3s.homes",
       "title": "高清片源聚合",
-      "version": "4.1.0",
+      "version": "5.0.0",
       "description": "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/home.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/home.js"
     },
     {
       "id": "app.mi3s.hires",
@@ -21,10 +21,10 @@
     {
       "id": "app.mi3s.diag",
       "title": "诊断",
-      "version": "3.0.0",
-      "description": "对比「后端取片」（照抄 AI 搜索）vs「TMDB 取片」，定位列表空白根因",
+      "version": "4.0.0",
+      "description": "对比「字符串 id」vs「数字 id」vs「网络取片」，定位列表空白根因",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/diag.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/diag.js"
     },
     {
       "id": "hyj1817.4kvm.resource",

@@ -16,49 +16,64 @@
 ## 远程订阅地址（统一走 jsDelivr，国内可直连）
 
 ```
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/home.js        # 首页片单 video
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/hires.js       # 播放源 stream
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/diag.js        # 诊断 video
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/4k-sources.js  # 4K 聚合 stream
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/home.js        # 首页片单 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/hires.js       # 播放源 stream
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/diag.js        # 诊断 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/4k-sources.js  # 4K 聚合 stream
 ```
 
 > `raw.githubusercontent.com` 国内基本被墙，直接添加会报「无法识别的模块数据」，务必用 jsDelivr。
-> 统一用不可变 tag `@v4.1.0`（`@main` 有 12h/7d 强缓存，改了代码不生效）。
-> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v4.1.0/home.js` 刷新 CDN。
+> 统一用不可变 tag `@v5.0.0`（`@main` 有 12h/7d 强缓存，改了代码不生效）。
+> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/home.js` 刷新 CDN。
 
-## ★ 根因与最终实现（v4.1.0）
+## ★ 根因与最终实现（v5.0.0）
 
-「列表空白 / 没有更多了」的**真正根因不是字段格式**，而是 `Widget.tmdb` 在真实渲染环境
-（资源库/首页）对第三方模块不可用——它在「调试」环境能返回数据，但渲染环境拿不到，
-导致列表空。
+数据源走 Rex 官方发现后端（与 AI 搜索 `rex.nlsearch` 同源），这一点没错。但反复「列表空白」的
+**真正根因是：第三方模块返回的条目里，`id` 和 `rating` 是后端下发的「数字」，而 Rex 渲染层对
+第三方模块的条目用 Swift Codable 解码，数字类型会让整批条目解析失败 → 被丢弃 → 列表空**。
 
-用户设备上唯一确认能正常显示的是官方「AI 搜索」模块（`rex.nlsearch`），它走的是
-**Rex 官方发现后端**，而不是 `Widget.tmdb`：
+决定性证据来自**唯一确认能正常工作的第三方模块 `douban-bridge`**（baranwang/douban-bridge）的源码：
 
 ```js
-// 与 AI 搜索逐字节同构
-const response = await Widget.http.post(
-  "https://api.rexnow.tv/api/discovery/ai-search/search",
-  { query: "热门电影", userId: "", language: "zh-CN" },
-  { headers: { "Content-Type": "application/json" } }
-);
-const data = response.data;
-if (!data || !data.success) throw new Error((data && data.message) || "搜索失败");
-return data.data || [];   // 条目由后端生成，客户端必然能渲染
+// douban-bridge 的条目转换（apps/rex-widget/src/cloud.ts）
+{
+  id: String(item.tmdbId ?? item.imdbId ?? item.doubanId),   // ← id 必须转字符串
+  type: item.tmdbId ? "tmdb" : item.imdbId ? "imdb" : "douban",
+  rating: String(item.rating),                                // ← rating 必须转字符串
+  posterPath: hostImagePath(item.images.poster),              // ← 相对路径
+}
 ```
 
-后端返回的条目字段：`id`(数字)、`type:"tmdb"`、`title`、`posterPath`(相对路径 `/xxx.jpg`)、
-`backdropPath`、`mediaType:"movie"|"tv"`、`rating`(数字)、`genreTitle`(`" / "` 分隔)。
-**这套格式就是 AI 搜索的格式**，`home.js` 原样透传，因此渲染行为与 AI 搜索一致。
+以及官方 ForwardWidgets 文档的返回模型里，`id` 写作 `"tv.123"` / `"movie.234"`、`rating` 写作 `"5"`
+——**都是字符串**。因此 `home.js` 在透传后端数据前，先做一层 `normalizeItem`：把 `id`、`rating`
+统一 `String()` 化，其余字段（type/title/posterPath 相对路径/backdropPath/mediaType/genreTitle）保持原样。
 
-> 之前误以为「`id`/`rating` 必须是字符串」（来自 `@rexnow/libs` 的 TS 类型声明），
-> 那是类型声明 ≠ 渲染契约的误导。实际客户端对后端下发的数字 id/rating 完全能渲染
-> （AI 搜索就是证据）。第三方模块的稳妥做法就是：**别自己拼 TMDB，直接调官方发现后端**。
+```js
+// home.js v5.0.0 关键改动
+function normalizeItem(it) {
+  return {
+    id: String(it.id),                      // 数字 → 字符串
+    type: it.type || "tmdb",
+    title: it.title || "",
+    description: it.description || "",
+    releaseDate: it.releaseDate || "",
+    posterPath: it.posterPath || "",        // 相对路径 /xxx.jpg
+    backdropPath: it.backdropPath || "",
+    mediaType: it.mediaType || "movie",
+    rating: (it.rating == null || it.rating === "") ? undefined : String(it.rating),
+    genreTitle: it.genreTitle || "",
+  };
+}
+```
 
-诊断模块 `diag.js` 提供双入口对照：① 后端取片（照抄 AI 搜索）② TMDB 取片（旧方案）。
-哪个入口有内容，就证明哪种数据源在真实渲染环境可用。
+> 之前「数字 id 也能渲染」的结论是错的——那是只看了官方 AI 搜索（官方模块有内置处理），
+> 没对照真正能跑的第三方模块。第三方模块必须自己把 `id`/`rating` 转字符串。
 
-### ⚠️ 后端限流（v4.1.0 已处理）
+诊断模块 `diag.js`（v4.0.0）提供三个硬编码对照入口，一锤定音：
+① 字符串 id（应出海报）② 数字 id（旧写法，应空白）③ 网络取片（新方案，应出海报）。
+哪个有内容，就证明哪种写法在真实渲染环境可用。
+
+### ⚠️ 后端限流（已处理）
 
 实测该发现后端对同一来源有速率限制：**连续约 16 次请求后返回 HTTP 429**。
 因此 4 个列表入口统一 `cacheDuration: 3600`（官方默认），1 小时内同一入口不重复请求；
