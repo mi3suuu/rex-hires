@@ -1,17 +1,17 @@
 WidgetMetadata = {
   "id": "app.mi3s.homes2",
   "title": "高清片源聚合2",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "requiredVersion": "0.0.1",
-  "description": "TMDB 榜单片单：热门电影、最新电影、高分电影、热门剧集。",
+  "description": "TMDB 榜单片单。前三个入口是同三组静态数据，只差一个变量，用来锁定渲染层到底要什么。",
   "author": "mi3s",
   "site": "https://github.com/mi3suuu/rex-hires",
   "modules": [
     {
-      "id": "env",
-      "title": "环境探针（看JS日志）",
-      "functionName": "env",
-      "description": "把运行环境、Widget API、收到的参数全部写进 JS日志，同时返回 3 条硬编码条目。",
+      "id": "rel",
+      "title": "静态A·字符串ID",
+      "functionName": "rel",
+      "description": "豆瓣桥同款：id 用字符串、rating 用字符串、相对海报路径。",
       "cacheDuration": 0,
       "requiresWebView": false,
       "params": [
@@ -23,10 +23,25 @@ WidgetMetadata = {
       ]
     },
     {
-      "id": "sample",
-      "title": "静态样片（不联网）",
-      "functionName": "sample",
-      "description": "完全不走网络，写死 6 部电影。用来区分是网络问题还是渲染问题。",
+      "id": "num",
+      "title": "静态B·数字ID",
+      "functionName": "num",
+      "description": "成品同款：id 用数字、rating 用数字、相对海报路径。",
+      "cacheDuration": 0,
+      "requiresWebView": false,
+      "params": [
+        {
+          "name": "page",
+          "title": "页码",
+          "type": "page"
+        }
+      ]
+    },
+    {
+      "id": "abs",
+      "title": "静态C·绝对海报URL",
+      "functionName": "abs",
+      "description": "海报给整条 https 地址，同时带 coverUrl / posterUrl / thumbnailUrl，绕开一切前缀拼接。",
       "cacheDuration": 0,
       "requiresWebView": false,
       "params": [
@@ -124,6 +139,81 @@ WidgetMetadata = {
   ]
 };
 
+var STATIC = [
+  { tmdb: 550, title: "搏击俱乐部", date: "1999-10-15", vote: 8.438, poster: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg", back: "/hZkgoQYus5vegHoetLkCJzb17zJ.jpg" },
+  { tmdb: 238, title: "教父", date: "1972-03-24", vote: 8.709, poster: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg", back: "/tmU7GeKVybMWFButWEGl2M4GeiP.jpg" },
+  { tmdb: 278, title: "肖申克的救赎", date: "1994-09-23", vote: 8.712, poster: "/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg", back: "/kXfqcdQKsToO0OUXHcrrNCHDBzO.jpg" },
+  { tmdb: 129, title: "千与千寻", date: "2001-07-20", vote: 8.538, poster: "/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg", back: "/Ab8mkHmkYADjU7wQiOkia9BzGvS.jpg" }
+];
+
+var IMG = "https://image.tmdb.org/t/p/w500";
+
+function absUrl(path) {
+  if (!path) return "";
+  if (path.indexOf("http") === 0) return path;
+  return IMG + path;
+}
+
+function logCount(tag, items) {
+  console.log("[" + tag + "] 返回 " + items.length + " 条；首条 id=" + JSON.stringify(items[0] && items[0].id) + " (" + typeof (items[0] && items[0].id) + ")，posterLength=" + String(items[0] && items[0].posterPath ? items[0].posterPath.length : 0));
+}
+
+async function rel(params) {
+  var items = STATIC.map(function (m) {
+    return {
+      id: String(m.tmdb),
+      type: "tmdb",
+      mediaType: "movie",
+      title: m.title,
+      releaseDate: m.date,
+      rating: String(m.vote),
+      posterPath: m.poster,
+      backdropPath: m.back
+    };
+  });
+  logCount("静态A", items);
+  return items;
+}
+
+async function num(params) {
+  var items = STATIC.map(function (m) {
+    return {
+      id: m.tmdb,
+      type: "tmdb",
+      mediaType: "movie",
+      title: m.title,
+      description: m.title + "（静态测试条目）",
+      posterPath: m.poster,
+      backdropPath: m.back,
+      releaseDate: m.date,
+      rating: m.vote
+    };
+  });
+  logCount("静态B", items);
+  return items;
+}
+
+async function abs(params) {
+  var items = STATIC.map(function (m) {
+    return {
+      id: String(m.tmdb),
+      type: "tmdb",
+      mediaType: "movie",
+      title: m.title,
+      description: m.title + "（绝对海报 URL）",
+      posterPath: absUrl(m.poster),
+      backdropPath: absUrl(m.back),
+      coverUrl: absUrl(m.poster),
+      posterUrl: absUrl(m.poster),
+      thumbnailUrl: absUrl(m.poster),
+      releaseDate: m.date,
+      rating: String(m.vote)
+    };
+  });
+  logCount("静态C", items);
+  return items;
+}
+
 function pageOption(value) {
   var page = Number(value);
   if (!isFinite(page) || page < 1) return 1;
@@ -133,7 +223,7 @@ function pageOption(value) {
 
 function videoItem(movie, mediaType) {
   return {
-    id: movie.id,
+    id: String(movie.id),
     type: "tmdb",
     mediaType: mediaType,
     title: movie.title || movie.name || movie.original_title || "未命名",
@@ -141,7 +231,7 @@ function videoItem(movie, mediaType) {
     posterPath: movie.poster_path || "",
     backdropPath: movie.backdrop_path || "",
     releaseDate: movie.release_date || movie.first_air_date || "",
-    rating: Number(movie.vote_average) || 0
+    rating: String(Number(movie.vote_average) || 0)
   };
 }
 
@@ -158,11 +248,13 @@ async function discover(api, query, params, mediaType, tag) {
     if (!response || !Array.isArray(response.results) || response.success === false) {
       throw new Error("TMDB 返回异常，请检查 Rex 的 TMDB 网络设置后重试");
     }
-    var items = response.results.filter(function (movie) {
-      return movie && movie.id && (movie.title || movie.name || movie.original_title);
-    }).map(function (movie) {
-      return videoItem(movie, mediaType);
-    });
+    var items = [];
+    for (var i = 0; i < response.results.length; i++) {
+      var movie = response.results[i];
+      if (!movie || !movie.id) continue;
+      if (!(movie.title || movie.name || movie.original_title)) continue;
+      items.push(videoItem(movie, mediaType));
+    }
     console.log("[" + tag + "] 第 " + request.page + " 页：" + items.length + " 部");
     return items;
   } catch (error) {
@@ -185,45 +277,4 @@ async function topRated(params) {
 
 async function tvPopular(params) {
   return discover("discover/tv", { sort_by: "popularity.desc" }, params, "tv", "热门剧集");
-}
-
-async function env(params) {
-  try {
-    console.log("[探针] 模块已加载，WidgetMetadata.id = " + String(WidgetMetadata && WidgetMetadata.id));
-    console.log("[探针] 收到参数 = " + JSON.stringify(params || null));
-    var keys = [];
-    try { keys = Object.keys(Widget || {}); } catch (e1) { keys = ["Object.keys(Widget) 抛错: " + e1]; }
-    console.log("[探针] Widget 上的成员 = " + keys.join(","));
-    console.log("[探针] typeof tmdb=" + typeof (Widget && Widget.tmdb) + " http=" + typeof (Widget && Widget.http) + " storage=" + typeof (Widget && Widget.storage) + " sharedCache=" + typeof (Widget && Widget.sharedCache) + " html=" + typeof (Widget && Widget.html) + " i18n=" + typeof (Widget && Widget.i18n));
-    if (Widget && Widget.tmdb && typeof Widget.tmdb.get === "function") {
-      try {
-        var probe = await Widget.tmdb.get("movie/550", { params: { language: "zh-CN" } });
-        console.log("[探针] TMDB 直连测试 OK，返回 title=" + String(probe && (probe.title || probe.name)) + " poster=" + String(probe && probe.poster_path));
-      } catch (e2) {
-        console.error("[探针] TMDB 直连测试失败: " + (e2 && e2.message ? e2.message : e2));
-      }
-    } else {
-      console.error("[探针] Widget.tmdb 不可用");
-    }
-  } catch (e0) {
-    console.error("[探针] 异常: " + (e0 && e0.message ? e0.message : e0));
-  }
-  return [
-    { id: 550, type: "tmdb", mediaType: "movie", title: "探针·搏击俱乐部", description: "探针返回的第 1 条", posterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg", backdropPath: "/hZkgoQYus5vegHoetLkCJzb17zJ.jpg", releaseDate: "1999-10-15", rating: 8.438 },
-    { id: 238, type: "tmdb", mediaType: "movie", title: "探针·教父", description: "探针返回的第 2 条", posterPath: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg", backdropPath: "/tmU7GeKVybMWFButWEGl2M4GeiP.jpg", releaseDate: "1972-03-24", rating: 8.709 },
-    { id: 278, type: "tmdb", mediaType: "movie", title: "探针·肖申克的救赎", description: "探针返回的第 3 条", posterPath: "/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg", backdropPath: "/kXfqcdQKsToO0OUXHcrrNCHDBzO.jpg", releaseDate: "1994-09-23", rating: 8.712 }
-  ];
-}
-
-async function sample(params) {
-  var items = [
-    { id: 550, type: "tmdb", mediaType: "movie", title: "搏击俱乐部", description: "一个人厌倦了自己的工作。", posterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg", backdropPath: "/hZkgoQYus5vegHoetLkCJzb17zJ.jpg", releaseDate: "1999-10-15", rating: 8.438 },
-    { id: 238, type: "tmdb", mediaType: "movie", title: "教父", description: "教父的传奇故事。", posterPath: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg", backdropPath: "/tmU7GeKVybMWFButWEGl2M4GeiP.jpg", releaseDate: "1972-03-24", rating: 8.709 },
-    { id: 278, type: "tmdb", mediaType: "movie", title: "肖申克的救赎", description: "希望是美好的事物。", posterPath: "/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg", backdropPath: "/kXfqcdQKsToO0OUXHcrrNCHDBzO.jpg", releaseDate: "1994-09-23", rating: 8.712 },
-    { id: 129, type: "tmdb", mediaType: "movie", title: "千与千寻", description: "宫崎骏作品。", posterPath: "/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg", backdropPath: "/Ab8mkHmkYADjU7wQiOkia9BzGvS.jpg", releaseDate: "2001-07-20", rating: 8.538 },
-    { id: 155, type: "tmdb", mediaType: "movie", title: "蝙蝠侠：黑暗骑士", description: "小丑登场。", posterPath: "/qJ2tW6WMUDux911r6m7haRef0WH.jpg", backdropPath: "/nMKdUUepR0i5zn0y1T4CsSB5chy.jpg", releaseDate: "2008-07-16", rating: 8.512 },
-    { id: 496243, type: "tmdb", mediaType: "movie", title: "寄生虫", description: "两个家庭的故事。", posterPath: "/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg", backdropPath: "/TU9NIjwzjoKPwQHoHshkFcQUCG.jpg", releaseDate: "2019-05-30", rating: 8.503 }
-  ];
-  console.log("[静态样片] " + items.length + " 部");
-  return items;
 }
