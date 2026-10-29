@@ -8,7 +8,7 @@
       "version": "8.0.0",
       "description": "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，条目格式照抄实机验证过海报的 ZurlyQin TMDB 模块，点进即调高清片源回 CMS 源解析播放地址",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/home.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/home.js"
     },
     {
       "id": "app.mi3s.hires",
@@ -16,7 +16,7 @@
       "version": "3.2.0",
       "description": "28 个 CMS 源 + 6 个直播源 + 测试片直链，多源聚合解析真实播放地址",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v3.0.0/hires.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/hires.js"
     },
     {
       "id": "app.mi3s.diag",
@@ -24,7 +24,7 @@
       "version": "8.0.0",
       "description": "26 种可行写法对照：A函数形式 / B type取值 / C id类型 / D 图片格式 / E 字段 / F 网络源，逐个点开看哪个出海报",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/diag.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/diag.js"
     },
     {
       "id": "hyj1817.4kvm.resource",
@@ -48,7 +48,7 @@
       "version": "1.0.0",
       "description": "100 个苹果CMS影视源多源聚合：优先4K/蓝光线路，含综合高清源与成人源，点进即出真实 m3u8 播放地址",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v3.0.0/4k-sources.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/4k-sources.js"
     }
   ]
 }
