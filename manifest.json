@@ -8,7 +8,7 @@
       "version": "2.5.0",
       "description": "首页片单走 TMDB 片库：最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材，点进即调高清片源回 CMS 源解析播放地址",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/home.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v2.5.0/home.js"
     },
     {
       "id": "app.mi3s.hires",
@@ -16,7 +16,7 @@
       "version": "3.2.0",
       "description": "28 个 CMS 源 + 6 个直播源 + 测试片直链，多源聚合解析真实播放地址",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/hires.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v2.5.0/hires.js"
     },
     {
       "id": "app.mi3s.diag",
@@ -24,7 +24,7 @@
       "version": "1.2.0",
       "description": "A/B 对照海报 URL 形式（完整 https vs 相对路径），排查首页海报墙空白",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/diag.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v2.5.0/diag.js"
     },
     {
       "id": "hyj1817.4kvm.resource",
@@ -48,7 +48,7 @@
       "version": "1.0.0",
       "description": "100 个苹果CMS影视源多源聚合：优先4K/蓝光线路，含综合高清源与成人源，点进即出真实 m3u8 播放地址",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/4k-sources.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v2.5.0/4k-sources.js"
     }
   ]
 }
