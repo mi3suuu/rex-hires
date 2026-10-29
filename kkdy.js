@@ -14,35 +14,6 @@
 // 因此本模块只做「分类浏览」，并在列表阶段就把每部片的播放直链解析好。
 // ============================================================================
 
-var KKDY_FILTERS = {
-  "1": {sort:[["1","综合"],["2","最新"],["3","最热"],["4","评分"]], category:[["","全部"],["NETFLIX","Netflix"],["剧情","剧情"],["喜剧","喜剧"],["动作","动作"],["爱情","爱情"],["恐怖","恐怖"],["惊悚","惊悚"],["犯罪","犯罪"],["科幻","科幻"],["悬疑","悬疑"],["奇幻","奇幻"],["冒险","冒险"],["战争","战争"],["历史","历史"],["古装","古装"],["家庭","家庭"],["传记","传记"],["武侠","武侠"],["歌舞","歌舞"],["短片","短片"],["动画","动画"],["儿童","儿童"],["职场","职场"]], area:[["","全部"],["中国大陆","大陆"],["中国香港","香港"],["中国台湾","台湾"],["美国","美国"],["日本","日本"],["韩国","韩国"],["英国","英国"],["法国","法国"],["德国","德国"],["印度","印度"],["泰国","泰国"],["丹麦","丹麦"],["瑞典","瑞典"],["巴西","巴西"],["加拿大","加拿大"],["俄罗斯","俄罗斯"],["意大利","意大利"],["比利时","比利时"],["爱尔兰","爱尔兰"],["西班牙","西班牙"],["澳大利亚","澳大利亚"],["其它","其它"]], year:[["","全部"],["2026","2026"],["2025","2025"],["2024","2024"],["2023","2023"],["2022","2022"],["2021","2021"],["2020","2020"],["2010-2019","10年代"],["2000-2009","00年代"],["1990-1999","90年代"],["1980-1989","80年代"],["0-1979","更早"]]},
-  "2": {sort:[["1","综合"],["2","最新"],["3","最热"],["4","评分"]], category:[["","全部"],["Netflix","Netflix"],["剧情","剧情"],["爱情","爱情"],["喜剧","喜剧"],["犯罪","犯罪"],["悬疑","悬疑"],["古装","古装"],["动作","动作"],["家庭","家庭"],["惊悚","惊悚"],["奇幻","奇幻"],["美剧","美剧"],["科幻","科幻"],["历史","历史"],["战争","战争"],["韩剧","韩剧"],["武侠","武侠"],["言情","言情"],["恐怖","恐怖"],["冒险","冒险"],["都市","都市"],["职场","职场"]], area:[["","全部"],["中国大陆","大陆"],["中国香港","香港"],["韩国","韩国"],["美国","美国"],["日本","日本"],["法国","法国"],["英国","英国"],["德国","德国"],["中国台湾","台湾"],["泰国","泰国"],["印度","印度"],["其它","其它"]], year:[["","全部"],["2026","2026"],["2025","2025"],["2024","2024"],["2023","2023"],["2022","2022"],["2021","2021"],["2020","2020"],["2010-2019","10年代"],["2000-2009","00年代"],["1990-1999","90年代"],["1980-1989","80年代"],["0-1979","更早"]]},
-  "3": {sort:[["1","综合"],["2","最新"],["3","最热"],["4","评分"]], category:[["","全部"],["Netflix","Netflix"],["动态漫画","动态漫画"],["剧情","剧情"],["动画","动画"],["喜剧","喜剧"],["冒险","冒险"],["动作","动作"],["奇幻","奇幻"],["科幻","科幻"],["儿童","儿童"],["搞笑","搞笑"],["爱情","爱情"],["家庭","家庭"],["短片","短片"],["热血","热血"],["益智","益智"],["悬疑","悬疑"],["经典","经典"],["校园","校园"],["Anime","Anime"],["运动","运动"],["亲子","亲子"],["青春","青春"],["恋爱","恋爱"],["武侠","武侠"],["惊悚","惊悚"]], area:[["","全部"],["中国大陆","大陆"],["中国香港","香港"],["中国台湾","台湾"],["美国","美国"],["日本","日本"],["韩国","韩国"],["英国","英国"],["法国","法国"],["德国","德国"],["印度","印度"],["泰国","泰国"],["丹麦","丹麦"],["瑞典","瑞典"],["巴西","巴西"],["加拿大","加拿大"],["俄罗斯","俄罗斯"],["意大利","意大利"],["比利时","比利时"],["爱尔兰","爱尔兰"],["西班牙","西班牙"],["澳大利亚","澳大利亚"],["其它","其它"]], year:[["","全部"],["2026","2026"],["2025","2025"],["2024","2024"],["2023","2023"],["2022","2022"],["2021","2021"],["2020","2020"],["2010-2019","10年代"],["2000-2009","00年代"],["1990-1999","90年代"],["1980-1989","80年代"],["0-1979","更早"]]},
-  "4": {sort:[["1","综合"],["2","最新"],["3","最热"],["4","评分"]], category:[["","全部"],["纪录","纪录"],["真人秀","真人秀"],["记录","记录"],["脱口秀","脱口秀"],["剧情","剧情"],["历史","历史"],["喜剧","喜剧"],["传记","传记"],["相声","相声"],["节目","节目"],["歌舞","歌舞"],["冒险","冒险"],["运动","运动"],["Season","Season"],["犯罪","犯罪"],["短片","短片"],["搞笑","搞笑"],["晚会","晚会"]], area:[["","全部"],["中国大陆","大陆"],["中国香港","香港"],["中国台湾","台湾"],["美国","美国"],["日本","日本"],["韩国","韩国"],["其它","其它"]], year:[["","全部"],["2026","2026"],["2025","2025"],["2024","2024"],["2023","2023"],["2022","2022"],["2021","2021"],["2020","2020"],["2010-2019","10年代"],["2000-2009","00年代"],["1990-1999","90年代"],["1980-1989","80年代"],["0-1979","更早"]]},
-  "5": {sort:[["1","综合"],["2","最新"],["3","最热"],["4","评分"]], category:[["","全部"],["伦理","伦理"],["福利","福利"],["倫理","倫理"],["剧情","剧情"],["情色","情色"],["爱情","爱情"],["喜剧","喜剧"],["惊悚","惊悚"],["写真","写真"],["美女","美女"],["恐怖","恐怖"],["犯罪","犯罪"],["悬疑","悬疑"],["动作","动作"],["同性","同性"],["奇幻","奇幻"],["古装","古装"],["青春","青春"],["科幻","科幻"],["文艺","文艺"]], area:[["","全部"],["中国大陆","大陆"],["中国香港","香港"],["中国台湾","台湾"],["美国","美国"],["日本","日本"],["韩国","韩国"],["英国","英国"],["法国","法国"],["德国","德国"],["印度","印度"],["泰国","泰国"],["丹麦","丹麦"],["瑞典","瑞典"],["巴西","巴西"],["加拿大","加拿大"],["俄罗斯","俄罗斯"],["意大利","意大利"],["比利时","比利时"],["爱尔兰","爱尔兰"],["西班牙","西班牙"],["澳大利亚","澳大利亚"],["其它","其它"]], year:[["","全部"],["2026","2026"],["2025","2025"],["2024","2024"],["2023","2023"],["2022","2022"],["2021","2021"],["2020","2020"],["2010-2019","10年代"],["2000-2009","00年代"],["1990-1999","90年代"],["1980-1989","80年代"],["0-1979","更早"]]},
-  "6": {sort:[["1","综合"],["2","最新"],["3","最热"]], category:[["","全部"],["擦边","擦边"],["王爷太子","王爷太子"],["霸道总裁","霸道总裁"],["屌丝逆袭","屌丝逆袭"],["赘婿系列","赘婿系列"],["重生系列","重生系列"],["穿越系列","穿越系列"],["美女总裁","美女总裁"],["娇妻系列","娇妻系列"],["龙王系列","龙王系列"],["都市言情","都市言情"],["爱情","爱情"],["剧情","剧情"],["都市","都市"],["逆袭","逆袭"],["甜宠","甜宠"],["虐恋","虐恋"],["穿越","穿越"],["重生","重生"],["科幻","科幻"],["武侠","武侠"],["古装","古装"],["动作","动作"],["战争","战争"],["冒险","冒险"],["其它","其它"]]},
-  "2001": {sort:[["1","综合"],["2","最新"],["3","最热"],["4","评分"]], category:[["","全部"],["NETFLIX","Netflix"],["剧情","剧情"],["喜剧","喜剧"],["动作","动作"],["爱情","爱情"],["恐怖","恐怖"],["惊悚","惊悚"],["犯罪","犯罪"],["科幻","科幻"],["悬疑","悬疑"],["奇幻","奇幻"],["冒险","冒险"],["战争","战争"],["历史","历史"],["古装","古装"],["家庭","家庭"],["传记","传记"],["武侠","武侠"],["歌舞","歌舞"],["短片","短片"],["动画","动画"],["儿童","儿童"],["职场","职场"]], area:[["","全部"],["中国大陆","大陆"],["中国香港","香港"],["中国台湾","台湾"],["美国","美国"],["日本","日本"],["韩国","韩国"],["英国","英国"],["法国","法国"],["德国","德国"],["印度","印度"],["泰国","泰国"],["丹麦","丹麦"],["瑞典","瑞典"],["巴西","巴西"],["加拿大","加拿大"],["俄罗斯","俄罗斯"],["意大利","意大利"],["比利时","比利时"],["爱尔兰","爱尔兰"],["西班牙","西班牙"],["澳大利亚","澳大利亚"],["其它","其它"]], year:[["","全部"],["2026","2026"],["2025","2025"],["2024","2024"],["2023","2023"],["2022","2022"],["2021","2021"],["2020","2020"],["2010-2019","10年代"],["2000-2009","00年代"],["1990-1999","90年代"],["1980-1989","80年代"],["0-1979","更早"]]},
-  "2002": {sort:[["1","综合"],["2","最新"],["3","最热"],["4","评分"]], category:[["","全部"],["Netflix","Netflix"],["剧情","剧情"],["爱情","爱情"],["喜剧","喜剧"],["犯罪","犯罪"],["悬疑","悬疑"],["古装","古装"],["动作","动作"],["家庭","家庭"],["惊悚","惊悚"],["奇幻","奇幻"],["美剧","美剧"],["科幻","科幻"],["历史","历史"],["战争","战争"],["韩剧","韩剧"],["武侠","武侠"],["言情","言情"],["恐怖","恐怖"],["冒险","冒险"],["都市","都市"],["职场","职场"]], area:[["","全部"],["中国大陆","大陆"],["中国香港","香港"],["韩国","韩国"],["美国","美国"],["日本","日本"],["法国","法国"],["英国","英国"],["德国","德国"],["中国台湾","台湾"],["泰国","泰国"],["印度","印度"],["其它","其它"]], year:[["","全部"],["2026","2026"],["2025","2025"],["2024","2024"],["2023","2023"],["2022","2022"],["2021","2021"],["2020","2020"],["2010-2019","10年代"],["2000-2009","00年代"],["1990-1999","90年代"],["1980-1989","80年代"],["0-1979","更早"]]},
-};
-
-var KKDY_CHANNELS = [
-  { key: "home", name: "推荐", ch: "0" },
-  { key: "netflix", name: "Netflix", ch: "1000" },
-  { key: "duanju", name: "短剧", ch: "6" },
-  { key: "movie", name: "电影", ch: "1" },
-  { key: "cinema", name: "院线上新", ch: "2001" },
-  { key: "tv", name: "剧集", ch: "2" },
-  { key: "kr", name: "韩剧", ch: "2002" },
-  { key: "anime", name: "动漫", ch: "3" },
-  { key: "variety", name: "综艺纪录", ch: "4" },
-  { key: "adult", name: "伦理", ch: "5" },
-];
-
-var KKDY_FN = {
-  home: "kkHome", netflix: "kkNetflix", duanju: "kkDuanju", movie: "kkMovie",
-  cinema: "kkCinema", tv: "kkTv", kr: "kkKr", anime: "kkAnime",
-  variety: "kkVariety", adult: "kkAdult",
-};
 
 // 图片域名（来自 appInit.groups.vod1，按权重排序）
 var KKDY_IMG = [
@@ -72,53 +43,158 @@ var KK_AES_KEY = "ayt5wy5afwmwrpb19k9s3psx3dymyd0n";
 var KK_AES_IV = "b3t069ijy7pirw0j";
 var KK_SIGN_KEY = "ksggsr4tp6difdo1c3im8fqd\u0033\u0067";
 
-// ---------------------------------------------------------------------------
-// 构建 metadata：每个分类一个模块，并带上该分类真实存在的筛选维度
-// ---------------------------------------------------------------------------
-WidgetMetadata = (function () {
-  var mods = [];
-  for (var i = 0; i < KKDY_CHANNELS.length; i++) {
-    var c = KKDY_CHANNELS[i];
-    var f = (typeof KKDY_FILTERS !== "undefined" && KKDY_FILTERS[c.ch]) || {};
-    var params = [];
-    var LABEL = { sort: "排序", category: "类型", area: "地区", year: "年份" };
-    var ORDER = ["sort", "category", "area", "year"];
-    for (var oi = 0; oi < ORDER.length; oi++) {
-      var k = ORDER[oi];
-      if (!f[k] || !f[k].length) continue;
-      var opts = [];
-      for (var j = 0; j < f[k].length; j++) opts.push([f[k][j][0], f[k][j][1]]);
-      params.push({
-        name: k,
-        label: LABEL[k],
-        type: "enum",
-        default: k === "sort" ? opts[0][0] : "",
-        options: opts,
-      });
-    }
-    params.push({ name: "page", label: "页码", type: "page", default: "1" });
-    mods.push({
-      id: "kk-" + c.key,
-      title: "可可 · " + c.name,
-      functionName: KKDY_FN[c.key],
-      description: "可可影视「" + c.name + "」分类，直连官方接口并解析播放直链",
-      type: "video",
+WidgetMetadata = {
+  id: "rex.mi3s.kkdy",
+  title: "可可影视",
+  description: "可可影视 App 私有接口直连：10 个分类全保留，播放直链实时解析",
+  author: "mi3s",
+  site: "https://github.com/mi3suuu/rex-hires",
+  version: "1.0.1",
+  requiredVersion: "0.0.1",
+  modules: [
+    {
+      id: "kk-home",
+      title: "可可 · 推荐",
+      functionName: "kkHome",
+      description: "可可影视「推荐」分类，直连官方接口并在列表阶段解析播放直链",
       cacheDuration: 1800,
       requiresWebView: false,
-      params: params,
-    });
-  }
-  return {
-    id: "rex.mi3s.kkdy",
-    title: "可可影视",
-    description: "可可影视 App 私有接口直连：10 个分类全保留，播放直链实时解析",
-    author: "mi3s",
-    site: "https://github.com/mi3suuu/rex-hires",
-    version: "1.0.0",
-    requiredVersion: "0.0.1",
-    modules: mods,
-  };
-})();
+      params: [
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-netflix",
+      title: "可可 · Netflix",
+      functionName: "kkNetflix",
+      description: "可可影视「Netflix」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-duanju",
+      title: "可可 · 短剧",
+      functionName: "kkDuanju",
+      description: "可可影视「短剧」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }] },
+        { name: "category", title: "类型", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "擦边", value: "擦边" }, { title: "王爷太子", value: "王爷太子" }, { title: "霸道总裁", value: "霸道总裁" }, { title: "屌丝逆袭", value: "屌丝逆袭" }, { title: "赘婿系列", value: "赘婿系列" }, { title: "重生系列", value: "重生系列" }, { title: "穿越系列", value: "穿越系列" }, { title: "美女总裁", value: "美女总裁" }, { title: "娇妻系列", value: "娇妻系列" }, { title: "龙王系列", value: "龙王系列" }, { title: "都市言情", value: "都市言情" }, { title: "爱情", value: "爱情" }, { title: "剧情", value: "剧情" }, { title: "都市", value: "都市" }, { title: "逆袭", value: "逆袭" }, { title: "甜宠", value: "甜宠" }, { title: "虐恋", value: "虐恋" }, { title: "穿越", value: "穿越" }, { title: "重生", value: "重生" }, { title: "科幻", value: "科幻" }, { title: "武侠", value: "武侠" }, { title: "古装", value: "古装" }, { title: "动作", value: "动作" }, { title: "战争", value: "战争" }, { title: "冒险", value: "冒险" }, { title: "其它", value: "其它" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-movie",
+      title: "可可 · 电影",
+      functionName: "kkMovie",
+      description: "可可影视「电影」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }, { title: "评分", value: "4" }] },
+        { name: "category", title: "类型", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "Netflix", value: "NETFLIX" }, { title: "剧情", value: "剧情" }, { title: "喜剧", value: "喜剧" }, { title: "动作", value: "动作" }, { title: "爱情", value: "爱情" }, { title: "恐怖", value: "恐怖" }, { title: "惊悚", value: "惊悚" }, { title: "犯罪", value: "犯罪" }, { title: "科幻", value: "科幻" }, { title: "悬疑", value: "悬疑" }, { title: "奇幻", value: "奇幻" }, { title: "冒险", value: "冒险" }, { title: "战争", value: "战争" }, { title: "历史", value: "历史" }, { title: "古装", value: "古装" }, { title: "家庭", value: "家庭" }, { title: "传记", value: "传记" }, { title: "武侠", value: "武侠" }, { title: "歌舞", value: "歌舞" }, { title: "短片", value: "短片" }, { title: "动画", value: "动画" }, { title: "儿童", value: "儿童" }, { title: "职场", value: "职场" }] },
+        { name: "area", title: "地区", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "大陆", value: "中国大陆" }, { title: "香港", value: "中国香港" }, { title: "台湾", value: "中国台湾" }, { title: "美国", value: "美国" }, { title: "日本", value: "日本" }, { title: "韩国", value: "韩国" }, { title: "英国", value: "英国" }, { title: "法国", value: "法国" }, { title: "德国", value: "德国" }, { title: "印度", value: "印度" }, { title: "泰国", value: "泰国" }, { title: "丹麦", value: "丹麦" }, { title: "瑞典", value: "瑞典" }, { title: "巴西", value: "巴西" }, { title: "加拿大", value: "加拿大" }, { title: "俄罗斯", value: "俄罗斯" }, { title: "意大利", value: "意大利" }, { title: "比利时", value: "比利时" }, { title: "爱尔兰", value: "爱尔兰" }, { title: "西班牙", value: "西班牙" }, { title: "澳大利亚", value: "澳大利亚" }, { title: "其它", value: "其它" }] },
+        { name: "year", title: "年份", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "2026", value: "2026" }, { title: "2025", value: "2025" }, { title: "2024", value: "2024" }, { title: "2023", value: "2023" }, { title: "2022", value: "2022" }, { title: "2021", value: "2021" }, { title: "2020", value: "2020" }, { title: "10年代", value: "2010-2019" }, { title: "00年代", value: "2000-2009" }, { title: "90年代", value: "1990-1999" }, { title: "80年代", value: "1980-1989" }, { title: "更早", value: "0-1979" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-cinema",
+      title: "可可 · 院线上新",
+      functionName: "kkCinema",
+      description: "可可影视「院线上新」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }, { title: "评分", value: "4" }] },
+        { name: "category", title: "类型", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "Netflix", value: "NETFLIX" }, { title: "剧情", value: "剧情" }, { title: "喜剧", value: "喜剧" }, { title: "动作", value: "动作" }, { title: "爱情", value: "爱情" }, { title: "恐怖", value: "恐怖" }, { title: "惊悚", value: "惊悚" }, { title: "犯罪", value: "犯罪" }, { title: "科幻", value: "科幻" }, { title: "悬疑", value: "悬疑" }, { title: "奇幻", value: "奇幻" }, { title: "冒险", value: "冒险" }, { title: "战争", value: "战争" }, { title: "历史", value: "历史" }, { title: "古装", value: "古装" }, { title: "家庭", value: "家庭" }, { title: "传记", value: "传记" }, { title: "武侠", value: "武侠" }, { title: "歌舞", value: "歌舞" }, { title: "短片", value: "短片" }, { title: "动画", value: "动画" }, { title: "儿童", value: "儿童" }, { title: "职场", value: "职场" }] },
+        { name: "area", title: "地区", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "大陆", value: "中国大陆" }, { title: "香港", value: "中国香港" }, { title: "台湾", value: "中国台湾" }, { title: "美国", value: "美国" }, { title: "日本", value: "日本" }, { title: "韩国", value: "韩国" }, { title: "英国", value: "英国" }, { title: "法国", value: "法国" }, { title: "德国", value: "德国" }, { title: "印度", value: "印度" }, { title: "泰国", value: "泰国" }, { title: "丹麦", value: "丹麦" }, { title: "瑞典", value: "瑞典" }, { title: "巴西", value: "巴西" }, { title: "加拿大", value: "加拿大" }, { title: "俄罗斯", value: "俄罗斯" }, { title: "意大利", value: "意大利" }, { title: "比利时", value: "比利时" }, { title: "爱尔兰", value: "爱尔兰" }, { title: "西班牙", value: "西班牙" }, { title: "澳大利亚", value: "澳大利亚" }, { title: "其它", value: "其它" }] },
+        { name: "year", title: "年份", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "2026", value: "2026" }, { title: "2025", value: "2025" }, { title: "2024", value: "2024" }, { title: "2023", value: "2023" }, { title: "2022", value: "2022" }, { title: "2021", value: "2021" }, { title: "2020", value: "2020" }, { title: "10年代", value: "2010-2019" }, { title: "00年代", value: "2000-2009" }, { title: "90年代", value: "1990-1999" }, { title: "80年代", value: "1980-1989" }, { title: "更早", value: "0-1979" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-tv",
+      title: "可可 · 剧集",
+      functionName: "kkTv",
+      description: "可可影视「剧集」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }, { title: "评分", value: "4" }] },
+        { name: "category", title: "类型", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "Netflix", value: "Netflix" }, { title: "剧情", value: "剧情" }, { title: "爱情", value: "爱情" }, { title: "喜剧", value: "喜剧" }, { title: "犯罪", value: "犯罪" }, { title: "悬疑", value: "悬疑" }, { title: "古装", value: "古装" }, { title: "动作", value: "动作" }, { title: "家庭", value: "家庭" }, { title: "惊悚", value: "惊悚" }, { title: "奇幻", value: "奇幻" }, { title: "美剧", value: "美剧" }, { title: "科幻", value: "科幻" }, { title: "历史", value: "历史" }, { title: "战争", value: "战争" }, { title: "韩剧", value: "韩剧" }, { title: "武侠", value: "武侠" }, { title: "言情", value: "言情" }, { title: "恐怖", value: "恐怖" }, { title: "冒险", value: "冒险" }, { title: "都市", value: "都市" }, { title: "职场", value: "职场" }] },
+        { name: "area", title: "地区", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "大陆", value: "中国大陆" }, { title: "香港", value: "中国香港" }, { title: "韩国", value: "韩国" }, { title: "美国", value: "美国" }, { title: "日本", value: "日本" }, { title: "法国", value: "法国" }, { title: "英国", value: "英国" }, { title: "德国", value: "德国" }, { title: "台湾", value: "中国台湾" }, { title: "泰国", value: "泰国" }, { title: "印度", value: "印度" }, { title: "其它", value: "其它" }] },
+        { name: "year", title: "年份", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "2026", value: "2026" }, { title: "2025", value: "2025" }, { title: "2024", value: "2024" }, { title: "2023", value: "2023" }, { title: "2022", value: "2022" }, { title: "2021", value: "2021" }, { title: "2020", value: "2020" }, { title: "10年代", value: "2010-2019" }, { title: "00年代", value: "2000-2009" }, { title: "90年代", value: "1990-1999" }, { title: "80年代", value: "1980-1989" }, { title: "更早", value: "0-1979" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-kr",
+      title: "可可 · 韩剧",
+      functionName: "kkKr",
+      description: "可可影视「韩剧」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }, { title: "评分", value: "4" }] },
+        { name: "category", title: "类型", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "Netflix", value: "Netflix" }, { title: "剧情", value: "剧情" }, { title: "爱情", value: "爱情" }, { title: "喜剧", value: "喜剧" }, { title: "犯罪", value: "犯罪" }, { title: "悬疑", value: "悬疑" }, { title: "古装", value: "古装" }, { title: "动作", value: "动作" }, { title: "家庭", value: "家庭" }, { title: "惊悚", value: "惊悚" }, { title: "奇幻", value: "奇幻" }, { title: "美剧", value: "美剧" }, { title: "科幻", value: "科幻" }, { title: "历史", value: "历史" }, { title: "战争", value: "战争" }, { title: "韩剧", value: "韩剧" }, { title: "武侠", value: "武侠" }, { title: "言情", value: "言情" }, { title: "恐怖", value: "恐怖" }, { title: "冒险", value: "冒险" }, { title: "都市", value: "都市" }, { title: "职场", value: "职场" }] },
+        { name: "area", title: "地区", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "大陆", value: "中国大陆" }, { title: "香港", value: "中国香港" }, { title: "韩国", value: "韩国" }, { title: "美国", value: "美国" }, { title: "日本", value: "日本" }, { title: "法国", value: "法国" }, { title: "英国", value: "英国" }, { title: "德国", value: "德国" }, { title: "台湾", value: "中国台湾" }, { title: "泰国", value: "泰国" }, { title: "印度", value: "印度" }, { title: "其它", value: "其它" }] },
+        { name: "year", title: "年份", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "2026", value: "2026" }, { title: "2025", value: "2025" }, { title: "2024", value: "2024" }, { title: "2023", value: "2023" }, { title: "2022", value: "2022" }, { title: "2021", value: "2021" }, { title: "2020", value: "2020" }, { title: "10年代", value: "2010-2019" }, { title: "00年代", value: "2000-2009" }, { title: "90年代", value: "1990-1999" }, { title: "80年代", value: "1980-1989" }, { title: "更早", value: "0-1979" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-anime",
+      title: "可可 · 动漫",
+      functionName: "kkAnime",
+      description: "可可影视「动漫」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }, { title: "评分", value: "4" }] },
+        { name: "category", title: "类型", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "Netflix", value: "Netflix" }, { title: "动态漫画", value: "动态漫画" }, { title: "剧情", value: "剧情" }, { title: "动画", value: "动画" }, { title: "喜剧", value: "喜剧" }, { title: "冒险", value: "冒险" }, { title: "动作", value: "动作" }, { title: "奇幻", value: "奇幻" }, { title: "科幻", value: "科幻" }, { title: "儿童", value: "儿童" }, { title: "搞笑", value: "搞笑" }, { title: "爱情", value: "爱情" }, { title: "家庭", value: "家庭" }, { title: "短片", value: "短片" }, { title: "热血", value: "热血" }, { title: "益智", value: "益智" }, { title: "悬疑", value: "悬疑" }, { title: "经典", value: "经典" }, { title: "校园", value: "校园" }, { title: "Anime", value: "Anime" }, { title: "运动", value: "运动" }, { title: "亲子", value: "亲子" }, { title: "青春", value: "青春" }, { title: "恋爱", value: "恋爱" }, { title: "武侠", value: "武侠" }, { title: "惊悚", value: "惊悚" }] },
+        { name: "area", title: "地区", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "大陆", value: "中国大陆" }, { title: "香港", value: "中国香港" }, { title: "台湾", value: "中国台湾" }, { title: "美国", value: "美国" }, { title: "日本", value: "日本" }, { title: "韩国", value: "韩国" }, { title: "英国", value: "英国" }, { title: "法国", value: "法国" }, { title: "德国", value: "德国" }, { title: "印度", value: "印度" }, { title: "泰国", value: "泰国" }, { title: "丹麦", value: "丹麦" }, { title: "瑞典", value: "瑞典" }, { title: "巴西", value: "巴西" }, { title: "加拿大", value: "加拿大" }, { title: "俄罗斯", value: "俄罗斯" }, { title: "意大利", value: "意大利" }, { title: "比利时", value: "比利时" }, { title: "爱尔兰", value: "爱尔兰" }, { title: "西班牙", value: "西班牙" }, { title: "澳大利亚", value: "澳大利亚" }, { title: "其它", value: "其它" }] },
+        { name: "year", title: "年份", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "2026", value: "2026" }, { title: "2025", value: "2025" }, { title: "2024", value: "2024" }, { title: "2023", value: "2023" }, { title: "2022", value: "2022" }, { title: "2021", value: "2021" }, { title: "2020", value: "2020" }, { title: "10年代", value: "2010-2019" }, { title: "00年代", value: "2000-2009" }, { title: "90年代", value: "1990-1999" }, { title: "80年代", value: "1980-1989" }, { title: "更早", value: "0-1979" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-variety",
+      title: "可可 · 综艺纪录",
+      functionName: "kkVariety",
+      description: "可可影视「综艺纪录」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }, { title: "评分", value: "4" }] },
+        { name: "category", title: "类型", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "纪录", value: "纪录" }, { title: "真人秀", value: "真人秀" }, { title: "记录", value: "记录" }, { title: "脱口秀", value: "脱口秀" }, { title: "剧情", value: "剧情" }, { title: "历史", value: "历史" }, { title: "喜剧", value: "喜剧" }, { title: "传记", value: "传记" }, { title: "相声", value: "相声" }, { title: "节目", value: "节目" }, { title: "歌舞", value: "歌舞" }, { title: "冒险", value: "冒险" }, { title: "运动", value: "运动" }, { title: "Season", value: "Season" }, { title: "犯罪", value: "犯罪" }, { title: "短片", value: "短片" }, { title: "搞笑", value: "搞笑" }, { title: "晚会", value: "晚会" }] },
+        { name: "area", title: "地区", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "大陆", value: "中国大陆" }, { title: "香港", value: "中国香港" }, { title: "台湾", value: "中国台湾" }, { title: "美国", value: "美国" }, { title: "日本", value: "日本" }, { title: "韩国", value: "韩国" }, { title: "其它", value: "其它" }] },
+        { name: "year", title: "年份", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "2026", value: "2026" }, { title: "2025", value: "2025" }, { title: "2024", value: "2024" }, { title: "2023", value: "2023" }, { title: "2022", value: "2022" }, { title: "2021", value: "2021" }, { title: "2020", value: "2020" }, { title: "10年代", value: "2010-2019" }, { title: "00年代", value: "2000-2009" }, { title: "90年代", value: "1990-1999" }, { title: "80年代", value: "1980-1989" }, { title: "更早", value: "0-1979" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+    {
+      id: "kk-adult",
+      title: "可可 · 伦理",
+      functionName: "kkAdult",
+      description: "可可影视「伦理」分类，直连官方接口并在列表阶段解析播放直链",
+      cacheDuration: 1800,
+      requiresWebView: false,
+      params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }, { title: "评分", value: "4" }] },
+        { name: "category", title: "类型", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "伦理", value: "伦理" }, { title: "福利", value: "福利" }, { title: "倫理", value: "倫理" }, { title: "剧情", value: "剧情" }, { title: "情色", value: "情色" }, { title: "爱情", value: "爱情" }, { title: "喜剧", value: "喜剧" }, { title: "惊悚", value: "惊悚" }, { title: "写真", value: "写真" }, { title: "美女", value: "美女" }, { title: "恐怖", value: "恐怖" }, { title: "犯罪", value: "犯罪" }, { title: "悬疑", value: "悬疑" }, { title: "动作", value: "动作" }, { title: "同性", value: "同性" }, { title: "奇幻", value: "奇幻" }, { title: "古装", value: "古装" }, { title: "青春", value: "青春" }, { title: "科幻", value: "科幻" }, { title: "文艺", value: "文艺" }] },
+        { name: "area", title: "地区", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "大陆", value: "中国大陆" }, { title: "香港", value: "中国香港" }, { title: "台湾", value: "中国台湾" }, { title: "美国", value: "美国" }, { title: "日本", value: "日本" }, { title: "韩国", value: "韩国" }, { title: "英国", value: "英国" }, { title: "法国", value: "法国" }, { title: "德国", value: "德国" }, { title: "印度", value: "印度" }, { title: "泰国", value: "泰国" }, { title: "丹麦", value: "丹麦" }, { title: "瑞典", value: "瑞典" }, { title: "巴西", value: "巴西" }, { title: "加拿大", value: "加拿大" }, { title: "俄罗斯", value: "俄罗斯" }, { title: "意大利", value: "意大利" }, { title: "比利时", value: "比利时" }, { title: "爱尔兰", value: "爱尔兰" }, { title: "西班牙", value: "西班牙" }, { title: "澳大利亚", value: "澳大利亚" }, { title: "其它", value: "其它" }] },
+        { name: "year", title: "年份", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "2026", value: "2026" }, { title: "2025", value: "2025" }, { title: "2024", value: "2024" }, { title: "2023", value: "2023" }, { title: "2022", value: "2022" }, { title: "2021", value: "2021" }, { title: "2020", value: "2020" }, { title: "10年代", value: "2010-2019" }, { title: "00年代", value: "2000-2009" }, { title: "90年代", value: "1990-1999" }, { title: "80年代", value: "1980-1989" }, { title: "更早", value: "0-1979" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
+      ],
+    },
+  ],
+};
+
 
 // ---------------------------------------------------------------------------
 // 纯 JS 密码学：字节工具
@@ -252,11 +328,8 @@ var KK_SBOX = [
   0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16,
 ];
 
-var KK_INV_SBOX = (function () {
-  var inv = new Array(256);
-  for (var i = 0; i < 256; i++) inv[KK_SBOX[i]] = i;
-  return inv;
-})();
+var KK_INV_SBOX = new Array(256);
+for (var kkInv = 0; kkInv < 256; kkInv++) KK_INV_SBOX[KK_SBOX[kkInv]] = kkInv;
 
 function kkXtime(a) { return ((a << 1) ^ ((a & 0x80) ? 0x1b : 0)) & 0xff; }
 
@@ -416,35 +489,25 @@ function kkDecode(resp) {
   }
 }
 
-// 依次尝试各域名，返回 data 字段；业务错误（带 code）直接放弃换域名也没用。
-// 记住上次成功的域名放到最前：可可线路之间延迟差很大，这一步能把耗时砍掉一半以上。
-var KK_HOST_PREF = "";
-
+// 依次尝试各域名，返回 data 字段；业务错误（带 code）直接放弃换域名也没用
 async function kkApi(path, params) {
   var qs = kkQs(params || {});
-  var order = KKDY_HOSTS.slice();
-  if (KK_HOST_PREF) {
-    var pi = order.indexOf(KK_HOST_PREF);
-    if (pi > 0) { order.splice(pi, 1); order.unshift(KK_HOST_PREF); }
-  }
+  var query = kkQs(params || {});
   var lastErr = null;
-  var tried = 0;
-  for (var i = 0; i < order.length; i++) {
-    var host = order[i];
-    var url = host + path + (qs ? "?" + qs : "");
+  for (var i = 0; i < KKDY_HOSTS.length; i++) {
+    var host = KKDY_HOSTS[i];
+    var url = host + path + (query ? "?" + query : "");
     var resp = null;
     try {
-      resp = await Widget.http.get(url, { headers: kkHeaders(path, qs), timeout: 6000 });
+      resp = await Widget.http.get(url, { headers: kkHeaders(path, qs), timeout: 9000 });
     } catch (e) {
       lastErr = e;
-      tried += 1;
-      if (tried >= 3) break;
       continue;
     }
     var j = kkDecode(resp);
-    if (!j) { lastErr = "decode"; tried += 1; if (tried >= 3) break; continue; }
-    if (j.code === 200 || j.code === 0) { KK_HOST_PREF = host; return j.data; }
-    if (j.code === undefined) { KK_HOST_PREF = host; return j; }
+    if (!j) { lastErr = "decode"; continue; }
+    if (j.code === 200 || j.code === 0) return j.data;
+    if (j.code === undefined) return j;
     // 业务错误
     lastErr = j.code + " " + (j.message || "");
     if (j.code === 40401) break;

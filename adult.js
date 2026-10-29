@@ -32,13 +32,13 @@ WidgetMetadata = {
   description: "12 个公网直连成人 CMS 源聚合，只输出可直接播放的 m3u8/mp4 直链",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.0.0",
+  version: "1.0.1",
   requiredVersion: "0.0.1",
   modules: [
     {
-      id: "adultResource",
+      id: "loadResource",
       title: "成人资源 · 聚合",
-      functionName: "adultResource",
+      functionName: "loadResource",
       description: "并发查询 12 个源，合并全部可播放线路",
       type: "stream",
       cacheDuration: 0,
@@ -234,7 +234,7 @@ async function aggregate(title, episode) {
   return collected;
 }
 
-async function adultResource(params) {
+async function loadResource(params) {
   params = params || {};
   var title = txt(params.seriesName || params.title || params.name);
   var episode = params.episode == null ? 1 : Number(params.episode);

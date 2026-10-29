@@ -47,52 +47,49 @@ WidgetMetadata = {
   description: "红果短剧官网直连：短剧 / 漫剧 / AI 短剧 全库分类 + 360p 直链播放",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.0.0",
+  version: "1.0.1",
   requiredVersion: "0.0.1",
   modules: [
     {
       id: "hgReal",
       title: "红果 · 短剧",
       functionName: "hgReal",
-      description: "官网短剧全库（约 800 部），按题材筛选",
-      type: "video",
+      description: "官网短剧全库（约 800 部），按 24 个题材筛选",
       cacheDuration: 1800,
       requiresWebView: false,
       params: [
-        { name: "genre", label: "题材", type: "enum", default: "", options: [["", "全部"]].concat(HG_GENRES.real) },
-        { name: "page", label: "页码", type: "page", default: "1" },
+        { name: "genre", title: "题材", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "爱情", value: "romance" }, { title: "年代", value: "period" }, { title: "逆袭", value: "comeback" }, { title: "传奇", value: "legend" }, { title: "成长", value: "growth" }, { title: "家庭", value: "family" }, { title: "家族", value: "clan" }, { title: "萌宝", value: "cute-kids" }, { title: "悬疑", value: "suspense" }, { title: "惊悚", value: "thriller" }, { title: "恐怖", value: "horror" }, { title: "志怪", value: "supernatural" }, { title: "古装", value: "costume" }, { title: "玄幻", value: "fantasy" }, { title: "奇幻", value: "wonder" }, { title: "都市", value: "urban" }, { title: "青春", value: "youth" }, { title: "喜剧", value: "comedy" }, { title: "科幻", value: "sci-fi" }, { title: "灾难", value: "disaster" }, { title: "动作冒险", value: "action-adventure" }, { title: "战争", value: "war" }, { title: "综艺", value: "variety" }, { title: "剧情", value: "drama" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
       id: "hgComic",
       title: "红果 · 漫剧",
       functionName: "hgComic",
-      description: "官网漫剧全库",
-      type: "video",
+      description: "官网漫剧全库，按 8 个题材筛选",
       cacheDuration: 1800,
       requiresWebView: false,
       params: [
-        { name: "genre", label: "题材", type: "enum", default: "", options: [["", "全部"]].concat(HG_GENRES.comic) },
-        { name: "page", label: "页码", type: "page", default: "1" },
+        { name: "genre", title: "题材", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "冒险", value: "adventure" }, { title: "末世", value: "apocalypse" }, { title: "脑洞", value: "creative" }, { title: "剧情", value: "drama" }, { title: "玄幻", value: "fantasy" }, { title: "科幻", value: "sci-fi" }, { title: "豪门", value: "wealthy-family" }, { title: "奇幻", value: "wonder" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
       id: "hgAi",
       title: "红果 · AI短剧",
       functionName: "hgAi",
-      description: "官网 AI 短剧全库",
-      type: "video",
+      description: "官网 AI 短剧全库，按 8 个题材筛选",
       cacheDuration: 1800,
       requiresWebView: false,
       params: [
-        { name: "genre", label: "题材", type: "enum", default: "", options: [["", "全部"]].concat(HG_GENRES.ai) },
-        { name: "page", label: "页码", type: "page", default: "1" },
+        { name: "genre", title: "题材", type: "enumeration", value: "", enumOptions: [{ title: "全部", value: "" }, { title: "冒险", value: "adventure" }, { title: "末世", value: "apocalypse" }, { title: "脑洞", value: "creative" }, { title: "剧情", value: "drama" }, { title: "玄幻", value: "fantasy" }, { title: "科幻", value: "sci-fi" }, { title: "豪门", value: "wealthy-family" }, { title: "奇幻", value: "wonder" }] },
+        { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
     {
-      id: "hgResource",
+      id: "loadResource",
       title: "红果短剧 · 播放源",
-      functionName: "hgResource",
+      functionName: "loadResource",
       description: "按片名在红果全库定位剧集，输出 360p mp4 直链",
       type: "stream",
       cacheDuration: 0,
@@ -346,7 +343,7 @@ async function scanForTitle(title) {
   return null;
 }
 
-async function hgResource(params) {
+async function loadResource(params) {
   params = params || {};
   var title = txt(params.seriesName || params.title || params.name);
   var episode = params.episode == null ? 1 : Number(params.episode);
