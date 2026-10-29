@@ -1,12 +1,27 @@
 WidgetMetadata = {
   "id": "app.mi3s.homes2",
   "title": "高清片源聚合2",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "requiredVersion": "0.0.1",
   "description": "TMDB 榜单片单：热门电影、最新电影、高分电影、热门剧集。",
   "author": "mi3s",
   "site": "https://github.com/mi3suuu/rex-hires",
   "modules": [
+    {
+      "id": "env",
+      "title": "环境探针（看JS日志）",
+      "functionName": "env",
+      "description": "把运行环境、Widget API、收到的参数全部写进 JS日志，同时返回 3 条硬编码条目。",
+      "cacheDuration": 0,
+      "requiresWebView": false,
+      "params": [
+        {
+          "name": "page",
+          "title": "页码",
+          "type": "page"
+        }
+      ]
+    },
     {
       "id": "sample",
       "title": "静态样片（不联网）",
@@ -170,6 +185,34 @@ async function topRated(params) {
 
 async function tvPopular(params) {
   return discover("discover/tv", { sort_by: "popularity.desc" }, params, "tv", "热门剧集");
+}
+
+async function env(params) {
+  try {
+    console.log("[探针] 模块已加载，WidgetMetadata.id = " + String(WidgetMetadata && WidgetMetadata.id));
+    console.log("[探针] 收到参数 = " + JSON.stringify(params || null));
+    var keys = [];
+    try { keys = Object.keys(Widget || {}); } catch (e1) { keys = ["Object.keys(Widget) 抛错: " + e1]; }
+    console.log("[探针] Widget 上的成员 = " + keys.join(","));
+    console.log("[探针] typeof tmdb=" + typeof (Widget && Widget.tmdb) + " http=" + typeof (Widget && Widget.http) + " storage=" + typeof (Widget && Widget.storage) + " sharedCache=" + typeof (Widget && Widget.sharedCache) + " html=" + typeof (Widget && Widget.html) + " i18n=" + typeof (Widget && Widget.i18n));
+    if (Widget && Widget.tmdb && typeof Widget.tmdb.get === "function") {
+      try {
+        var probe = await Widget.tmdb.get("movie/550", { params: { language: "zh-CN" } });
+        console.log("[探针] TMDB 直连测试 OK，返回 title=" + String(probe && (probe.title || probe.name)) + " poster=" + String(probe && probe.poster_path));
+      } catch (e2) {
+        console.error("[探针] TMDB 直连测试失败: " + (e2 && e2.message ? e2.message : e2));
+      }
+    } else {
+      console.error("[探针] Widget.tmdb 不可用");
+    }
+  } catch (e0) {
+    console.error("[探针] 异常: " + (e0 && e0.message ? e0.message : e0));
+  }
+  return [
+    { id: 550, type: "tmdb", mediaType: "movie", title: "探针·搏击俱乐部", description: "探针返回的第 1 条", posterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg", backdropPath: "/hZkgoQYus5vegHoetLkCJzb17zJ.jpg", releaseDate: "1999-10-15", rating: 8.438 },
+    { id: 238, type: "tmdb", mediaType: "movie", title: "探针·教父", description: "探针返回的第 2 条", posterPath: "/3bhkrj58Vtu7enYsRolD1fZdja1.jpg", backdropPath: "/tmU7GeKVybMWFButWEGl2M4GeiP.jpg", releaseDate: "1972-03-24", rating: 8.709 },
+    { id: 278, type: "tmdb", mediaType: "movie", title: "探针·肖申克的救赎", description: "探针返回的第 3 条", posterPath: "/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg", backdropPath: "/kXfqcdQKsToO0OUXHcrrNCHDBzO.jpg", releaseDate: "1994-09-23", rating: 8.712 }
+  ];
 }
 
 async function sample(params) {
