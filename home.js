@@ -1,19 +1,22 @@
 // ============================================================================
-// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v5.0.0
+// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v6.0.0
 // ----------------------------------------------------------------------------
-// ★ 实现方式完全复刻官方「AI 搜索」模块（rex.nlsearch），因为它是用户设备上
-//   唯一确认能正常显示的模块（依据官方 ForwardWidgets 文档 + 实机对照）：
-//   - 数据源：走 Rex 官方后端 https://api.rexnow.tv/api/discovery/ai-search/search
-//   - 请求：Widget.http.post（与 AI 搜索逐字节一致）
-//   - 返回：后端 data.data（条目由 Rex 后端生成，客户端必然能渲染）
-//   不再依赖 Widget.tmdb（它在「调试」环境可用、但在资源库/首页渲染环境对
-//   第三方模块不可用，导致列表空白 —— v2.3~v3.0 反复空的根因）。
+// ★ 数据源走 Rex 官方发现服务（与官方「AI 搜索」同源）：
+//   - 请求：Widget.http.post 到 https://api.rexnow.tv/api/discovery/ai-search/search
+//   - 返回：后端 data.data 的条目（id/type/title/posterPath 等）
 //
-// ★ 限流说明（v4.1.0）：该后端对同一来源有速率限制（实测连续 ~16 次返回 429），
-//   因此 4 个列表入口统一 cacheDuration=3600（官方默认），1 小时内同一入口不
-//   重复请求；正常使用（首页 4 行海报 = 4 次请求）远低于限流阈值。
+// ★ 关键（v6.0.0，根因修正）：条目 type 必须用 "url"、图片填「完整 https URL」。
+//   官方「AI 搜索」是 isOfficial=true，能透传 type:"tmdb" 显示，因为它有内置
+//   TMDB 桥；第三方模块（isOfficial=false）没有这个桥（反编译见
+//   tmdb.bridge.not.configured + tmdbImageProxyHost 已 404），type:"tmdb" 条目
+//   会整批失败 → 列表「没有更多」。改用 type:"url" 走通用封面回退链（coverUrl
+//   只填即可全位置出图），不依赖 TMDB 桥。
 //
-// 播放链路：点进条目后，Rex 把片名传给 stream 模块（app.mi3s.hires）回 CMS 源。
+// ★ 限流说明：该后端对同一来源有速率限制（实测连续 ~16 次返回 429），因此
+//   列表入口统一 cacheDuration=3600（官方默认），1 小时内同一入口不重复请求。
+//
+// 播放链路：条目保留 tmdbId 字段，点进后 stream 模块（app.mi3s.hires）按
+// title 回 CMS 源解析播放地址，播放链路不受影响。
 // ============================================================================
 
 var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
@@ -21,7 +24,7 @@ var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
 WidgetMetadata = {
   id: "app.mi3s.homes",
   title: "高清片源聚合",
-  version: "5.0.0",
+  version: "6.0.0",
   requiredVersion: "0.0.1",
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
@@ -123,25 +126,37 @@ WidgetMetadata = {
 };
 
 // 把后端条目规范成 Rex 渲染层可稳定解析的 VideoItem。
-// 关键（v5.0.0）：id / rating 必须转成「字符串」，不能透传后端的数字。
-// 依据：唯一确认能工作的第三方模块 douban-bridge 就是 `id: String(tmdbId)`、
-//       `rating: String(...)`；官方 ForwardWidgets 文档的返回模型里 id 写作
-//       "tv.123" / "movie.234"、rating 写作 "5"（都是字符串）。第三方模块的条目
-//       走 Swift Codable 解码，数字 id 会解析失败导致整批条目被丢弃 → 列表空白。
+// 关键（v6.0.0，根因修正）：type 必须用 "url"，图片字段填「完整 https 图片 URL」。
+// 依据三重证据：
+//   1) 官方「AI 搜索」是 isOfficial=true，直接 return data.data 透传 type:"tmdb"
+//      能显示——因为它有内置 TMDB 桥；第三方模块（isOfficial=false）没有这个桥，
+//      type:"tmdb" 条目会整批失败 → 列表「没有更多」。
+//   2) 反编译 Rex 主二进制发现 services.copy.tmdb.bridge.not.configured
+//      （"TMDB 桥未配置"）+ tmdbImageProxyHost（实测 rexnow.tv/t/p 已 404）。
+//   3) ForwardWidgets 官方文档：type:"url" 走通用封面回退链（coverUrl 只填即可
+//      全位置出图），不依赖 TMDB 桥；type:"tmdb"/douban/imdb 才走内置详情页。
+// 保留 tmdbId 字段：点进条目后 stream 模块（app.mi3s.hires）仍能按 title 回 CMS
+// 源解析播放地址，播放链路不受影响。
+var IMG_BASE = "https://image.tmdb.org/t/p";
+
 function normalizeItem(it) {
   if (!it) return null;
-  var rating = it.rating;
+  var id = it.id != null ? String(it.id) : "";
+  var poster = it.posterPath || "";
+  var backdrop = it.backdropPath || "";
   return {
-    id: String(it.id != null ? it.id : ""),
-    type: it.type || "tmdb",
+    id: id,
+    type: "url",
     title: it.title || "",
     description: it.description || "",
     releaseDate: it.releaseDate || "",
-    posterPath: it.posterPath || "",
-    backdropPath: it.backdropPath || "",
+    coverUrl: poster ? IMG_BASE + "/w500" + poster : (backdrop ? IMG_BASE + "/w1280" + backdrop : ""),
+    posterPath: poster ? IMG_BASE + "/w500" + poster : "",
+    backdropPath: backdrop ? IMG_BASE + "/w1280" + backdrop : "",
     mediaType: it.mediaType || "movie",
-    rating: (rating == null || rating === "") ? undefined : String(rating),
+    rating: it.rating,
     genreTitle: it.genreTitle || "",
+    tmdbId: id,
   };
 }
 

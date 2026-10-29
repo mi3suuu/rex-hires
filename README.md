@@ -16,62 +16,68 @@
 ## 远程订阅地址（统一走 jsDelivr，国内可直连）
 
 ```
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/home.js        # 首页片单 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v6.0.0/home.js        # 首页片单 video
 https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/hires.js       # 播放源 stream
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/diag.js        # 诊断 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v6.0.0/diag.js        # 诊断 video
 https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/4k-sources.js  # 4K 聚合 stream
 ```
 
 > `raw.githubusercontent.com` 国内基本被墙，直接添加会报「无法识别的模块数据」，务必用 jsDelivr。
-> 统一用不可变 tag `@v5.0.0`（`@main` 有 12h/7d 强缓存，改了代码不生效）。
-> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/home.js` 刷新 CDN。
+> 统一用不可变 tag（`@main` 有 12h/7d 强缓存，改了代码不生效）：`home.js`/`diag.js` 用 `@v6.0.0`，
+> `hires.js`/`4k-sources.js`（stream 模块未变）用 `@v5.0.0`。
+> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v6.0.0/home.js` 刷新 CDN。
 
-## ★ 根因与最终实现（v5.0.0）
+## ★ 根因与最终实现（v6.0.0）
 
-数据源走 Rex 官方发现后端（与 AI 搜索 `rex.nlsearch` 同源），这一点没错。但反复「列表空白」的
-**真正根因是：第三方模块返回的条目里，`id` 和 `rating` 是后端下发的「数字」，而 Rex 渲染层对
-第三方模块的条目用 Swift Codable 解码，数字类型会让整批条目解析失败 → 被丢弃 → 列表空**。
+数据源走 Rex 官方发现后端（与 AI 搜索 `rex.nlsearch` 同源），这一点没错。反复「列表空白 / 没有更多」
+的**真正根因是：第三方模块（isOfficial=false）的条目 `type` 用了 `"tmdb"`，而 `tmdb` 类型要走
+Rex 内置的 TMDB 详情页 / 图片代理（TMDB 桥），第三方模块没有这个桥 → 整批条目失败**。
 
-决定性证据来自**唯一确认能正常工作的第三方模块 `douban-bridge`**（baranwang/douban-bridge）的源码：
+三重证据：
+
+1. **官方「AI 搜索」是 isOfficial=true，能透传 `type:"tmdb"` 显示**——它的 `nlSearch` 直接
+   `return data.data`，原样返回后端条目（数字 id、`type:"tmdb"`、相对 posterPath），能显示是
+   因为官方模块内置了 TMDB 桥；这**不等于**第三方模块也能用 `type:"tmdb"`。
+2. **反编译 Rex 主二进制**发现 `services.copy.tmdb.bridge.not.configured`（"TMDB 桥未配置"）和
+   `tmdbImageProxyHost` 配置项；实测代理地址 `rexnow.tv/t/p`、`assets.rexnow.tv/t/p` 均 404。
+3. **ForwardWidgets 官方文档**明确：`type:"url"` 走通用封面回退链（`coverUrl` 只填即可全位置
+   出图），**不依赖 TMDB 桥**；`type:"tmdb"` / `douban` / `imdb` 才走内置详情页。
+
+因此 `home.js` 的 `normalizeItem` 改为：`type` 用 `"url"`，`posterPath`/`backdropPath`/`coverUrl`
+拼**完整 https 图片 URL**（`https://image.tmdb.org/t/p/w500/xxx.jpg`，实测国内可直连），并额外
+保留 `tmdbId` 字段供播放链路使用：
 
 ```js
-// douban-bridge 的条目转换（apps/rex-widget/src/cloud.ts）
-{
-  id: String(item.tmdbId ?? item.imdbId ?? item.doubanId),   // ← id 必须转字符串
-  type: item.tmdbId ? "tmdb" : item.imdbId ? "imdb" : "douban",
-  rating: String(item.rating),                                // ← rating 必须转字符串
-  posterPath: hostImagePath(item.images.poster),              // ← 相对路径
-}
-```
-
-以及官方 ForwardWidgets 文档的返回模型里，`id` 写作 `"tv.123"` / `"movie.234"`、`rating` 写作 `"5"`
-——**都是字符串**。因此 `home.js` 在透传后端数据前，先做一层 `normalizeItem`：把 `id`、`rating`
-统一 `String()` 化，其余字段（type/title/posterPath 相对路径/backdropPath/mediaType/genreTitle）保持原样。
-
-```js
-// home.js v5.0.0 关键改动
+// home.js v6.0.0 关键改动
+var IMG_BASE = "https://image.tmdb.org/t/p";
 function normalizeItem(it) {
+  var id = it.id != null ? String(it.id) : "";
+  var poster = it.posterPath || "";
+  var backdrop = it.backdropPath || "";
   return {
-    id: String(it.id),                      // 数字 → 字符串
-    type: it.type || "tmdb",
+    id: id,
+    type: "url",                                             // ← 关键：不再用 "tmdb"
     title: it.title || "",
     description: it.description || "",
     releaseDate: it.releaseDate || "",
-    posterPath: it.posterPath || "",        // 相对路径 /xxx.jpg
-    backdropPath: it.backdropPath || "",
+    coverUrl: poster ? IMG_BASE + "/w500" + poster : (backdrop ? IMG_BASE + "/w1280" + backdrop : ""),
+    posterPath: poster ? IMG_BASE + "/w500" + poster : "",   // ← 完整 https URL
+    backdropPath: backdrop ? IMG_BASE + "/w1280" + backdrop : "",
     mediaType: it.mediaType || "movie",
-    rating: (it.rating == null || it.rating === "") ? undefined : String(it.rating),
+    rating: it.rating,
     genreTitle: it.genreTitle || "",
+    tmdbId: id,                                              // ← 保留，供 stream 播放
   };
 }
 ```
 
-> 之前「数字 id 也能渲染」的结论是错的——那是只看了官方 AI 搜索（官方模块有内置处理），
-> 没对照真正能跑的第三方模块。第三方模块必须自己把 `id`/`rating` 转字符串。
+> 播放链路不受影响：stream 模块 `app.mi3s.hires` 的 `loadResource` 只按 `title` 回 CMS 源解析，
+> 不依赖 `type` 或 `tmdbId`；条目保留 `title` + `tmdbId` 即可正常出播放地址。
 
-诊断模块 `diag.js`（v4.0.0）提供三个硬编码对照入口，一锤定音：
-① 字符串 id（应出海报）② 数字 id（旧写法，应空白）③ 网络取片（新方案，应出海报）。
-哪个有内容，就证明哪种写法在真实渲染环境可用。
+诊断模块 `diag.js`（v6.0.0）提供四个对照入口，一锤定音：
+① `type=url` + 完整图（应出海报）② `type=tmdb` + 完整图（对照）③ `type=tmdb` + 相对路径（旧方案，应空白）
+④ 网络取片 → `type=url`（真实后端数据 + 新方案）。
+①④ 出图、③ 空白，即证明根因是 `type:"tmdb"` 对第三方不可用。
 
 ### ⚠️ 后端限流（已处理）
 
