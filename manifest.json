@@ -21,8 +21,8 @@
     {
       "id": "rex.mi3s.kkdy",
       "title": "可可影视",
-      "version": "1.0.1",
-      "description": "直连可可影视 App 私有接口（HMAC-SHA1 签名 + AES-256-CBC 解密全部纯 JS 实现），保留全部 10 个分类（推荐/Netflix/短剧/电影/院线上新/剧集/韩剧/动漫/综艺纪录/伦理）与各频道全部类型·地区·年份·排序筛选，列表即解析播放直链。零本机中转。",
+      "version": "1.0.2",
+      "description": "直连可可影视 App 私有接口（HMAC-SHA1 签名 + AES-256-CBC 解密全部纯 JS 实现），保留全部 10 个分类（推荐/Netflix/短剧/电影/院线上新/剧集/韩剧/动漫/综艺纪录/伦理）与各频道全部类型·地区·年份·排序筛选，列表即解析播放直链。Netflix 为跨频道 category=NETFLIX 合并片单。零本机中转。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/kkdy.js"
     },

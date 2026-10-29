@@ -49,7 +49,7 @@ WidgetMetadata = {
   description: "可可影视 App 私有接口直连：10 个分类全保留，播放直链实时解析",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.0.1",
+  version: "1.0.2",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -67,10 +67,11 @@ WidgetMetadata = {
       id: "kk-netflix",
       title: "可可 · Netflix",
       functionName: "kkNetflix",
-      description: "可可影视「Netflix」分类，直连官方接口并在列表阶段解析播放直链",
+      description: "可可影视「Netflix」专区（跨电影/剧集/动漫/综艺/伦理合并的 category=NETFLIX 片单）",
       cacheDuration: 1800,
       requiresWebView: false,
       params: [
+        { name: "sort", title: "排序", type: "enumeration", value: "1", enumOptions: [{ title: "综合", value: "1" }, { title: "最新", value: "2" }, { title: "最热", value: "3" }] },
         { name: "page", title: "页码", type: "page", value: "1" },
       ],
     },
@@ -569,9 +570,14 @@ async function kkDetail(vodId) {
   return { url: best, sourceName: bestName, title: d.title || "", cover: kkCover(d), intro: d.summary || "", total: sources.length, raw: d };
 }
 
-async function runChannel(ch, params) {
+// chs 可以是单个频道 id，也可以是频道数组（跨频道合并，如 Netflix）
+// opts.category 用于强制套用某个分类筛选（Netflix 就是跨频道 category=NETFLIX）
+async function runChannel(chs, params, opts) {
   params = params || {};
-  var q = { channelId: String(ch), next: kkPageNext(params.page) };
+  opts = opts || {};
+  if (Object.prototype.toString.call(chs) !== "[object Array]") chs = [chs];
+
+  var q = { next: kkPageNext(params.page) };
   var FILTER_KEYS = ["sort", "category", "area", "year"];
   for (var i = 0; i < FILTER_KEYS.length; i++) {
     var k = FILTER_KEYS[i];
@@ -579,15 +585,36 @@ async function runChannel(ch, params) {
     if (v === undefined || v === null || v === "") continue;
     q[k] = String(v);
   }
+  if (opts.category) q.category = opts.category;
 
-  var data = null;
-  try {
-    data = await kkApi("/vod/channel/list.capi", q);
-  } catch (e) {
-    return [];
+  var lists = await Promise.all(
+    chs.map(function (c) {
+      var qq = {};
+      for (var k2 in q) qq[k2] = q[k2];
+      qq.channelId = String(c);
+      return kkApi("/vod/channel/list.capi", qq).then(
+        function (d) { return d; },
+        function () { return null; }
+      );
+    })
+  );
+
+  var items = [];
+  var seen = {};
+  for (var li = 0; li < lists.length; li++) {
+    var arr = (lists[li] && lists[li].items) || [];
+    for (var aj = 0; aj < arr.length; aj++) {
+      var one = arr[aj];
+      if (!one || one.id == null) continue;
+      if (seen[one.id]) continue;
+      seen[one.id] = 1;
+      items.push(one);
+    }
   }
-  var items = (data && data.items) || [];
+  if (opts.limit && items.length > opts.limit) items = items.slice(0, opts.limit);
   if (!items.length) return [];
+
+  var mediaType = opts.mediaType || (chs[0] === "6" ? "tv" : "movie");
 
   // 逐条解析播放直链（并发 8），解析失败的条目不丢，退回详情型
   var out = new Array(items.length);
@@ -605,7 +632,7 @@ async function runChannel(ch, params) {
         description: "",
         posterPath: cover,
         coverUrl: cover,
-        mediaType: ch === "6" ? "tv" : "movie",
+        mediaType: mediaType,
         genreTitle: "",
         playerType: "app",
       };
@@ -636,8 +663,12 @@ async function runChannel(ch, params) {
 }
 
 async function kkHome(p) { return runChannel("0", p); }
-async function kkNetflix(p) { return runChannel("1000", p); }
-async function kkDuanju(p) { return runChannel("6", p); }
+// Netflix 在可可里不是独立频道（channelId=1000 恒为空），而是跨频道的 category=NETFLIX 筛选：
+// 电影/剧集/动漫/综艺/伦理各频道带上 category=NETFLIX 才有内容，故这里跨频道合并并去重。
+async function kkNetflix(p) {
+  return runChannel(["1", "2", "3", "4", "5"], p, { category: "NETFLIX", limit: 24 });
+}
+async function kkDuanju(p) { return runChannel("6", p, { mediaType: "tv" }); }
 async function kkMovie(p) { return runChannel("1", p); }
 async function kkCinema(p) { return runChannel("2001", p); }
 async function kkTv(p) { return runChannel("2", p); }
