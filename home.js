@@ -26,6 +26,7 @@ WidgetMetadata = {
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
+  iconurl: "https://assets.rexnow.tv/scripts/rex-icon.png",
   modules: [
     {
       id: "latest",
@@ -172,8 +173,8 @@ function normalizeItem(it) {
     mediaType: it.mediaType || "movie",
     title: it.title || "",
     description: it.description || "",
-    posterPath: it.posterPath || "",
-    backdropPath: it.backdropPath || "",
+    posterPath: String(it.posterPath || "").trim(),
+    backdropPath: String(it.backdropPath || "").trim(),
     releaseDate: it.releaseDate || "",
     rating: (rating == null || rating === "") ? undefined : String(rating)
   };
@@ -309,8 +310,8 @@ async function official(params) {
       title: item.title || item.name || "",
       description: item.overview || "",
       releaseDate: item.release_date || item.first_air_date || "",
-      backdropPath: item.backdrop_path || "",
-      posterPath: item.poster_path || "",
+      backdropPath: String(item.backdrop_path || "").trim(),
+      posterPath: String(item.poster_path || "").trim(),
       rating: item.vote_average == null ? undefined : String(item.vote_average),
       mediaType: mt,
       genreTitle: genreTitleWith(item.genre_ids),
