@@ -279,9 +279,10 @@ async function category(params) {
     }, "movie");
   }
   if (cat === "short") {
+    // TMDB 的运行时筛选参数名带点：with_runtime.gte / with_runtime.lte（不是下划线）
     return await tmdbFetch("discover/movie", {
       sort_by: "popularity.desc", page: page, language: language,
-      with_runtime_gte: "1", with_runtime_lte: "60", include_adult: false,
+      "with_runtime.gte": "1", "with_runtime.lte": "60", include_adult: false,
     }, "movie");
   }
   return [];
