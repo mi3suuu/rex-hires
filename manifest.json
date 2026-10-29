@@ -1,14 +1,14 @@
 {
-  "title": "Rex 播放源合集（stream + video）",
-  "description": "高清播放源模块合集：首页聚合片单（video）+ 播放源解析（stream）。点进影片即出播放地址。",
+  "title": "Rex 播放源合集（video + stream）",
+  "description": "高清播放源模块合集：首页聚合片单（video）+ 播放源解析（stream）。点进影片即出播放地址。全部走 jsDelivr CDN（国内可直连，避免 raw.githubusercontent.com 被墙）。",
   "widgets": [
     {
       "id": "app.mi3s.homes",
       "title": "高清片源聚合",
-      "version": "2.3.0",
+      "version": "2.4.0",
       "description": "首页片单走 TMDB 片库：最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材，点进即调高清片源回 CMS 源解析播放地址",
       "author": "mi3s",
-      "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/home.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/home.js"
     },
     {
       "id": "app.mi3s.hires",
@@ -16,7 +16,15 @@
       "version": "3.2.0",
       "description": "28 个 CMS 源 + 6 个直播源 + 测试片直链，多源聚合解析真实播放地址",
       "author": "mi3s",
-      "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/hires.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/hires.js"
+    },
+    {
+      "id": "app.mi3s.diag",
+      "title": "诊断",
+      "version": "1.1.0",
+      "description": "诊断 type:tmdb 渲染链路与 Widget.tmdb 可用性（固定 Fight Club + 实时 trending）",
+      "author": "mi3s",
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/diag.js"
     },
     {
       "id": "hyj1817.4kvm.resource",
@@ -40,7 +48,7 @@
       "version": "1.0.0",
       "description": "100 个苹果CMS影视源多源聚合：优先4K/蓝光线路，含综合高清源与成人源，点进即出真实 m3u8 播放地址",
       "author": "mi3s",
-      "url": "https://raw.githubusercontent.com/mi3suuu/rex-hires/main/4k-sources.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/4k-sources.js"
     }
   ]
 }
