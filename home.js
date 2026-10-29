@@ -1,20 +1,29 @@
 // ============================================================================
-// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v8.0.0
+// Rex 片单模块 · 高清片源聚合（rex.mi3s.homes） v10.0.0
 // ----------------------------------------------------------------------------
+// ★★★ v10.0.0 真正的根因（2026-10-29 在 iOS 27.1 模拟器里逐项实测确认）★★★
+//
+//   Rex 只对 widget id 以 `rex.` 开头的模块构建 video 显示模型。
+//   id 用 `app.` 前缀的模块：脚本能加载、元数据能解析、调试（Test）能成功返回 N 条，
+//   但「预览」与「资源库」永远是空/「没有更多了」，因为显示模型这一层不会为它生成条目。
+//
+//   实测四组对照，仅 widget id 不同、其余逐字相同：
+//     t1.js  id = rex.mi3s.homes       → 正常出海报
+//     镜像   id = rex.tmdb.mi3smirror  → 正常出海报
+//     t3.js  id = app.mi3s.t3          → 预览 "No more items"
+//     t4.js  id = rex.mi3s.t3（仅改前缀）→ 立即正常出海报
+//   官方 4 个模块（rex.tmdb / rex.bangumi / rex.nlsearch / rex.danmu）也都是 rex. 前缀。
+//
+//   所以：本模块 id 从 `app.mi3s.homes` 改为 `rex.mi3s.homes`。
+//   ⚠️ id 改了就是一个新模块，旧的那个可以直接删掉。
+//
 // ★ 数据源：Rex 官方发现服务（与官方「AI 搜索」同源）
 //   Widget.http.post 到 https://api.rexnow.tv/api/discovery/ai-search/search
-//
-// ★★ 本版根因修正（v8.0.0）：照抄唯一「实机海报显示正常」的第三方模块
-//   ZurlyQin/rex-widgets 的 TMDB 电影精选（README 实测验证），它用的是：
-//     1. `async function xxx(params){}` 函数声明（非全局赋值）
-//     2. 数字 id、数字 rating（Number(...) || 0，不字符串化）
-//     3. type:"tmdb"、posterPath/backdropPath 传 TMDB 相对路径 /xxx.jpg
-//   之前 v5「字符串化」/ v6「type=url」/ v7「全局赋值」三个结论均被该成品推翻。
+//   该后端对少数 query 会返回 posterPath 为空的条目（实测「最新上映的电影和剧集」首条
+//   是一条俄语片、海报字段为空）→ v10 起把这些无海报条目过滤掉，宁可少几条也不要白框。
 //
 // ★ 限流说明：该后端连续 ~16 次请求返回 429。
-//   v8.2.0：cacheDuration 3600 → 120。原因：首次拉取若失败，空数组会被缓存一小时，
-//   期间「预览」恒空而「调试」正常（调试绕过缓存）—— 正是本模块长期「调试有数据、预览空白」的形态。
-//   120 秒既不会把失败钉死一小时，又远低于触发 429 的请求密度。
+//   cacheDuration 用 600：既不会把失败的空结果钉死一小时，又远低于触发 429 的请求密度。
 //
 // 播放链路：点进条目后，Rex 调 stream 模块（app.mi3s.hires）按 title 回 CMS 源。
 // ============================================================================
@@ -22,9 +31,9 @@
 var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
 
 WidgetMetadata = {
-  id: "app.mi3s.homes",
+  id: "rex.mi3s.homes",
   title: "高清片源聚合",
-  version: "9.0.0",
+  version: "10.0.0",
   requiredVersion: "0.0.1",
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
@@ -35,7 +44,8 @@ WidgetMetadata = {
       id: "latest",
       title: "最新更新",
       functionName: "latest",
-      cacheDuration: 120,
+      cacheDuration: 600,
+      requiresWebView: false,
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
@@ -45,7 +55,8 @@ WidgetMetadata = {
       id: "hot",
       title: "热播榜",
       functionName: "hot",
-      cacheDuration: 120,
+      cacheDuration: 600,
+      requiresWebView: false,
       params: [
         { name: "language", title: "语言", type: "language", value: "zh-CN" },
         { name: "userId", title: "用户 ID", type: "userId" },
@@ -55,7 +66,8 @@ WidgetMetadata = {
       id: "category",
       title: "分类",
       functionName: "category",
-      cacheDuration: 120,
+      cacheDuration: 600,
+      requiresWebView: false,
       params: [
         {
           name: "type",
@@ -78,7 +90,8 @@ WidgetMetadata = {
       id: "genre",
       title: "题材",
       functionName: "genre",
-      cacheDuration: 120,
+      cacheDuration: 600,
+      requiresWebView: false,
       params: [
         {
           name: "genre",
@@ -107,7 +120,8 @@ WidgetMetadata = {
       id: "official",
       title: "官方TMDB同款",
       functionName: "official",
-      cacheDuration: 120,
+      cacheDuration: 600,
+      requiresWebView: false,
       params: [
         {
           name: "board",
@@ -172,9 +186,21 @@ WidgetMetadata = {
 //
 // 所以 v9.0.0 起：raw 原样返回，必要时只做一次浅拷贝以便补字段，绝不裁字段。
 // ============================================================================
+// 判断条目是否带海报（后端字段名不统一，把常见别名都算上）
+function hasPoster(it) {
+  var keys = ["posterPath", "posterUrl", "posterURL", "posterurl", "coverUrl",
+              "thumbnailUrl", "imageUrl", "detailPoster", "detailPosterPath"];
+  for (var i = 0; i < keys.length; i++) {
+    var v = it[keys[i]];
+    if (v && String(v).replace(/\s/g, "") !== "") return true;
+  }
+  return false;
+}
+
 function passthrough(items) {
   if (!items || !items.length) return [];
-  var out = [];
+  var out = [];   // 有海报的
+  var all = [];   // 全部（兜底）
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
     if (!it || typeof it !== "object") continue;
@@ -185,9 +211,12 @@ function passthrough(items) {
     if (!copy.title) copy.title = copy.name || copy.originalTitle || copy.original_title || "";
     if (!copy.type) copy.type = "tmdb";
     if (!copy.mediaType) copy.mediaType = copy.media_type || (copy.firstAirDate || copy.first_air_date ? "tv" : "movie");
-    out.push(copy);
+    all.push(copy);
+    if (hasPoster(copy)) out.push(copy);
   }
-  return out;
+  // 后端对少数 query 会返回 posterPath 为空的条目（会渲染成白框），优先只留有海报的；
+  // 万一整批都没海报，就退回全部，至少标题还能看。
+  return out.length ? out : all;
 }
 
 // 调 Rex 官方发现服务，返回后端生成的条目（照抄 rex.nlsearch 的 nlSearch）
