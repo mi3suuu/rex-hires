@@ -8,6 +8,21 @@ WidgetMetadata = {
   "site": "https://github.com/mi3suuu/rex-hires",
   "modules": [
     {
+      "id": "sample",
+      "title": "静态样片（不联网）",
+      "functionName": "sample",
+      "description": "完全不走网络，写死 6 部电影。用来区分是网络问题还是渲染问题。",
+      "cacheDuration": 1800,
+      "requiresWebView": false,
+      "params": [
+        {
+          "name": "page",
+          "title": "页码",
+          "type": "page"
+        }
+      ]
+    },
+    {
       "id": "popular",
       "title": "热门电影",
       "functionName": "popular",
@@ -88,21 +103,6 @@ WidgetMetadata = {
           "title": "资料语言",
           "type": "language",
           "value": "zh-CN"
-        }
-      ]
-    },
-    {
-      "id": "sample",
-      "title": "静态样片（不联网）",
-      "functionName": "sample",
-      "description": "完全不走网络，写死 6 部电影。用来区分是网络问题还是渲染问题。",
-      "cacheDuration": 1800,
-      "requiresWebView": false,
-      "params": [
-        {
-          "name": "page",
-          "title": "页码",
-          "type": "page"
         }
       ]
     }
