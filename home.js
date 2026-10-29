@@ -1,22 +1,27 @@
 // ============================================================================
-// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v6.0.0
+// Rex 片单模块 · 高清片源聚合（app.mi3s.homes） v7.0.0
 // ----------------------------------------------------------------------------
 // ★ 数据源走 Rex 官方发现服务（与官方「AI 搜索」同源）：
 //   - 请求：Widget.http.post 到 https://api.rexnow.tv/api/discovery/ai-search/search
-//   - 返回：后端 data.data 的条目（id/type/title/posterPath 等）
+//   - 返回：后端 data.data 的条目
 //
-// ★ 关键（v6.0.0，根因修正）：条目 type 必须用 "url"、图片填「完整 https URL」。
-//   官方「AI 搜索」是 isOfficial=true，能透传 type:"tmdb" 显示，因为它有内置
-//   TMDB 桥；第三方模块（isOfficial=false）没有这个桥（反编译见
-//   tmdb.bridge.not.configured + tmdbImageProxyHost 已 404），type:"tmdb" 条目
-//   会整批失败 → 列表「没有更多」。改用 type:"url" 走通用封面回退链（coverUrl
-//   只填即可全位置出图），不依赖 TMDB 桥。
+// ★★ 真正根因（v7.0.0，反复空白 6 个版本的最终定位）：
+//   第三方模块（isOfficial=false）的入口函数【必须用「全局赋值」形式暴露】，
+//   即 `latest = async function(params){...}`，不能用 `async function latest(){}`
+//   函数声明，也不能用 `export`。
+//   决定性证据：官方 SDK 仓库 baranwang/rex-widget-libs 的脚手架模板
+//   examples/rslib-plugin/src/index.ts 里就是 `testFunction = async (params)=>{...}`；
+//   唯一能正常显示的第三方视频模块 @rexnow/douban（豆瓣榜单）的产物也是
+//   `loadDefaultCatalog = ...` 全局赋值。官方「AI 搜索」能用函数声明，是因为它走
+//   isOfficial=true 的 bundledOfficialData 特殊加载路径。
 //
-// ★ 限流说明：该后端对同一来源有速率限制（实测连续 ~16 次返回 429），因此
-//   列表入口统一 cacheDuration=3600（官方默认），1 小时内同一入口不重复请求。
+// ★ 条目字段对齐 @rexnow/douban（实测可显示的第三方 video 模块）：
+//   type:"tmdb"（走内置详情页，自动拿 TMDB 详情/图片，第三方也支持）、
+//   posterPath/backdropPath 传 TMDB 相对路径 /xxx.jpg、id/rating 字符串化。
 //
-// 播放链路：条目保留 tmdbId 字段，点进后 stream 模块（app.mi3s.hires）按
-// title 回 CMS 源解析播放地址，播放链路不受影响。
+// ★ 限流说明：该后端连续 ~16 次请求返回 429，列表入口统一 cacheDuration=3600。
+//
+// 播放链路：点进条目后，Rex 调 stream 模块（app.mi3s.hires）按 title 回 CMS 源。
 // ============================================================================
 
 var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
@@ -24,7 +29,7 @@ var API_BASE = "https://api.rexnow.tv/api/discovery/ai-search";
 WidgetMetadata = {
   id: "app.mi3s.homes",
   title: "高清片源聚合",
-  version: "6.0.0",
+  version: "7.0.0",
   requiredVersion: "0.0.1",
   description: "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，点进即调高清片源回 CMS 源解析播放地址",
   author: "mi3s",
@@ -126,42 +131,28 @@ WidgetMetadata = {
 };
 
 // 把后端条目规范成 Rex 渲染层可稳定解析的 VideoItem。
-// 关键（v6.0.0，根因修正）：type 必须用 "url"，图片字段填「完整 https 图片 URL」。
-// 依据三重证据：
-//   1) 官方「AI 搜索」是 isOfficial=true，直接 return data.data 透传 type:"tmdb"
-//      能显示——因为它有内置 TMDB 桥；第三方模块（isOfficial=false）没有这个桥，
-//      type:"tmdb" 条目会整批失败 → 列表「没有更多」。
-//   2) 反编译 Rex 主二进制发现 services.copy.tmdb.bridge.not.configured
-//      （"TMDB 桥未配置"）+ tmdbImageProxyHost（实测 rexnow.tv/t/p 已 404）。
-//   3) ForwardWidgets 官方文档：type:"url" 走通用封面回退链（coverUrl 只填即可
-//      全位置出图），不依赖 TMDB 桥；type:"tmdb"/douban/imdb 才走内置详情页。
-// 保留 tmdbId 字段：点进条目后 stream 模块（app.mi3s.hires）仍能按 title 回 CMS
-// 源解析播放地址，播放链路不受影响。
-var IMG_BASE = "https://image.tmdb.org/t/p";
-
-function normalizeItem(it) {
+// 对齐 @rexnow/douban（实测可显示的第三方 video 模块）：
+//   id/rating 字符串化，type 用 "tmdb"（走内置详情页），posterPath/backdropPath
+//   传 TMDB 相对路径（/xxx.jpg）。第三方模块的 type:"tmdb" 是支持的（douban 即证）。
+normalizeItem = function (it) {
   if (!it) return null;
-  var id = it.id != null ? String(it.id) : "";
-  var poster = it.posterPath || "";
-  var backdrop = it.backdropPath || "";
+  var rating = it.rating;
   return {
-    id: id,
-    type: "url",
+    id: String(it.id != null ? it.id : ""),
+    type: it.type || "tmdb",
     title: it.title || "",
     description: it.description || "",
     releaseDate: it.releaseDate || "",
-    coverUrl: poster ? IMG_BASE + "/w500" + poster : (backdrop ? IMG_BASE + "/w1280" + backdrop : ""),
-    posterPath: poster ? IMG_BASE + "/w500" + poster : "",
-    backdropPath: backdrop ? IMG_BASE + "/w1280" + backdrop : "",
+    posterPath: it.posterPath || "",
+    backdropPath: it.backdropPath || "",
     mediaType: it.mediaType || "movie",
-    rating: it.rating,
+    rating: (rating == null || rating === "") ? undefined : String(rating),
     genreTitle: it.genreTitle || "",
-    tmdbId: id,
   };
-}
+};
 
 // 调 Rex 官方发现服务，返回后端生成的条目（照抄 rex.nlsearch 的 nlSearch）
-async function aiDiscover(query, params) {
+aiDiscover = async function (query, params) {
   var language = (params && params.language) || "zh-CN";
   var userId = (params && params.userId) || "";
   try {
@@ -185,15 +176,15 @@ async function aiDiscover(query, params) {
     console.error("[高清片源] 请求失败:", error && error.message ? error.message : error);
     throw new Error("片单服务暂时不可用，请稍后再试");
   }
-}
+};
 
-async function latest(params) {
+latest = async function (params) {
   return await aiDiscover("最新上映的电影和剧集", params);
-}
+};
 
-async function hot(params) {
+hot = async function (params) {
   return await aiDiscover("本周热播的电影和剧集", params);
-}
+};
 
 var CATEGORY_QUERY = {
   movie: "热门电影",
@@ -203,10 +194,10 @@ var CATEGORY_QUERY = {
   documentary: "热门纪录片",
 };
 
-async function category(params) {
+category = async function (params) {
   var type = (params && params.type) || "movie";
   return await aiDiscover(CATEGORY_QUERY[type] || "热门电影", params);
-}
+};
 
 var GENRE_QUERY = {
   action: "动作电影",
@@ -222,13 +213,13 @@ var GENRE_QUERY = {
   fantasy: "奇幻电影",
 };
 
-async function genre(params) {
+genre = async function (params) {
   var g = (params && params.genre) || "action";
   return await aiDiscover(GENRE_QUERY[g] || "动作电影", params);
-}
+};
 
-async function search(params) {
+search = async function (params) {
   var keyword = ((params && (params.keyword || params.query)) || "").trim();
   if (!keyword) throw new Error("请输入片名或描述");
   return await aiDiscover(keyword, params);
-}
+};

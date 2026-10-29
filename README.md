@@ -16,68 +16,65 @@
 ## 远程订阅地址（统一走 jsDelivr，国内可直连）
 
 ```
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v6.0.0/home.js        # 首页片单 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/home.js        # 首页片单 video
 https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/hires.js       # 播放源 stream
-https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v6.0.0/diag.js        # 诊断 video
+https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/diag.js        # 诊断 video
 https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v5.0.0/4k-sources.js  # 4K 聚合 stream
 ```
 
 > `raw.githubusercontent.com` 国内基本被墙，直接添加会报「无法识别的模块数据」，务必用 jsDelivr。
-> 统一用不可变 tag（`@main` 有 12h/7d 强缓存，改了代码不生效）：`home.js`/`diag.js` 用 `@v6.0.0`，
+> 统一用不可变 tag（`@main` 有 12h/7d 强缓存，改了代码不生效）：`home.js`/`diag.js` 用 `@v7.0.0`，
 > `hires.js`/`4k-sources.js`（stream 模块未变）用 `@v5.0.0`。
-> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v6.0.0/home.js` 刷新 CDN。
+> 更新后如需立即生效，访问 `https://purge.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/home.js` 刷新 CDN。
 
-## ★ 根因与最终实现（v6.0.0）
+## ★ 根因与最终实现（v7.0.0）
 
 数据源走 Rex 官方发现后端（与 AI 搜索 `rex.nlsearch` 同源），这一点没错。反复「列表空白 / 没有更多」
-的**真正根因是：第三方模块（isOfficial=false）的条目 `type` 用了 `"tmdb"`，而 `tmdb` 类型要走
-Rex 内置的 TMDB 详情页 / 图片代理（TMDB 桥），第三方模块没有这个桥 → 整批条目失败**。
+的**真正根因是：第三方模块（isOfficial=false）的入口函数必须用「全局赋值」形式暴露**
+（`latest = async function(params){...}`），**不能用 `async function latest(){}` 函数声明，也不能用 `export`**。
 
-三重证据：
+决定性证据：
 
-1. **官方「AI 搜索」是 isOfficial=true，能透传 `type:"tmdb"` 显示**——它的 `nlSearch` 直接
-   `return data.data`，原样返回后端条目（数字 id、`type:"tmdb"`、相对 posterPath），能显示是
-   因为官方模块内置了 TMDB 桥；这**不等于**第三方模块也能用 `type:"tmdb"`。
-2. **反编译 Rex 主二进制**发现 `services.copy.tmdb.bridge.not.configured`（"TMDB 桥未配置"）和
-   `tmdbImageProxyHost` 配置项；实测代理地址 `rexnow.tv/t/p`、`assets.rexnow.tv/t/p` 均 404。
-3. **ForwardWidgets 官方文档**明确：`type:"url"` 走通用封面回退链（`coverUrl` 只填即可全位置
-   出图），**不依赖 TMDB 桥**；`type:"tmdb"` / `douban` / `imdb` 才走内置详情页。
+1. **官方 SDK 仓库 `baranwang/rex-widget-libs`**（Rex Widget 官方开发工具链）的脚手架模板
+   `examples/rslib-plugin/src/index.ts` 里，函数就是这样写的：
+   ```js
+   testFunction = async (params) => { console.log(params); return []; };
+   ```
+   而同文件的注释里，`export function` 和 `function` 声明写法都被**否定掉了**。
+2. **唯一实测能正常显示的第三方 video 模块 `@rexnow/douban`（豆瓣榜单）**，其编译产物里函数就是
+   `loadDefaultCatalog = ...`、`loadSearch = async ...` 的全局赋值形式。
+3. 官方「AI 搜索」用 `async function nlSearch` 函数声明能显示，是因为它走 `isOfficial=true` 的
+   `bundledOfficialData` 特殊加载路径（全局作用域直接求值）；第三方模块走导入路径，函数声明不会
+   暴露到 Rex 能读取的全局作用域 → Rex 调用入口函数失败 → 列表「没有更多」。
 
-因此 `home.js` 的 `normalizeItem` 改为：`type` 用 `"url"`，`posterPath`/`backdropPath`/`coverUrl`
-拼**完整 https 图片 URL**（`https://image.tmdb.org/t/p/w500/xxx.jpg`，实测国内可直连），并额外
-保留 `tmdbId` 字段供播放链路使用：
+条目字段对齐 `@rexnow/douban`（实测可显示的第三方 video 模块）：
 
 ```js
-// home.js v6.0.0 关键改动
-var IMG_BASE = "https://image.tmdb.org/t/p";
-function normalizeItem(it) {
-  var id = it.id != null ? String(it.id) : "";
-  var poster = it.posterPath || "";
-  var backdrop = it.backdropPath || "";
+// home.js v7.0.0 关键改动：① 函数全局赋值 ② 字段对齐 douban
+normalizeItem = function (it) {
   return {
-    id: id,
-    type: "url",                                             // ← 关键：不再用 "tmdb"
+    id: String(it.id),                       // 字符串
+    type: it.type || "tmdb",                 // "tmdb"（走内置详情页，第三方也支持）
     title: it.title || "",
     description: it.description || "",
     releaseDate: it.releaseDate || "",
-    coverUrl: poster ? IMG_BASE + "/w500" + poster : (backdrop ? IMG_BASE + "/w1280" + backdrop : ""),
-    posterPath: poster ? IMG_BASE + "/w500" + poster : "",   // ← 完整 https URL
-    backdropPath: backdrop ? IMG_BASE + "/w1280" + backdrop : "",
+    posterPath: it.posterPath || "",         // TMDB 相对路径 /xxx.jpg
+    backdropPath: it.backdropPath || "",
     mediaType: it.mediaType || "movie",
-    rating: it.rating,
+    rating: it.rating == null ? undefined : String(it.rating),  // 字符串
     genreTitle: it.genreTitle || "",
-    tmdbId: id,                                              // ← 保留，供 stream 播放
   };
-}
+};
+
+latest = async function (params) { return await aiDiscover("最新上映的电影和剧集", params); };
+// ... hot / category / genre / search 同理，全部全局赋值
 ```
 
-> 播放链路不受影响：stream 模块 `app.mi3s.hires` 的 `loadResource` 只按 `title` 回 CMS 源解析，
-> 不依赖 `type` 或 `tmdbId`；条目保留 `title` + `tmdbId` 即可正常出播放地址。
+> 之前的 `type:"url"`（v6.0.0）、`id/rating 字符串化`（v5.0.0）都是**方向错误的中间结论**——因为
+> `@rexnow/douban` 用 `type:"tmdb"` + 相对路径就能正常显示，证明问题不在字段格式，而在函数暴露方式。
 
-诊断模块 `diag.js`（v6.0.0）提供四个对照入口，一锤定音：
-① `type=url` + 完整图（应出海报）② `type=tmdb` + 完整图（对照）③ `type=tmdb` + 相对路径（旧方案，应空白）
-④ 网络取片 → `type=url`（真实后端数据 + 新方案）。
-①④ 出图、③ 空白，即证明根因是 `type:"tmdb"` 对第三方不可用。
+诊断模块 `diag.js`（v7.0.0）两个入口（都用全局赋值函数）：① 硬编码 `type=tmdb` 条目（验证第三方列表渲染）
+② 网络取片（真实后端数据端到端）。① 能出海报即证明修复生效。
 
 ### ⚠️ 后端限流（已处理）
 

@@ -5,10 +5,10 @@
     {
       "id": "app.mi3s.homes",
       "title": "高清片源聚合",
-      "version": "6.0.0",
-      "description": "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，条目 type=url 走通用封面回退链，点进即调高清片源回 CMS 源解析播放地址",
+      "version": "7.0.0",
+      "description": "片单走 Rex 官方发现服务（与 AI 搜索同源）：最新更新 / 热播榜 / 分类 / 题材 / 自由搜片，入口函数全局赋值暴露，点进即调高清片源回 CMS 源解析播放地址",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v6.0.0/home.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/home.js"
     },
     {
       "id": "app.mi3s.hires",
@@ -21,10 +21,10 @@
     {
       "id": "app.mi3s.diag",
       "title": "诊断",
-      "version": "6.0.0",
-      "description": "对比 type=url / type=tmdb / 相对路径 / 网络取片，定位第三方模块列表空白根因",
+      "version": "7.0.0",
+      "description": "验证第三方模块「全局赋值函数」修复：硬编码条目 / 网络取片",
       "author": "mi3s",
-      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v6.0.0/diag.js"
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v7.0.0/diag.js"
     },
     {
       "id": "hyj1817.4kvm.resource",
