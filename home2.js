@@ -1,7 +1,7 @@
 WidgetMetadata = {
   "id": "app.mi3s.homes2",
   "title": "高清片源聚合2",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "requiredVersion": "0.0.1",
   "description": "TMDB 榜单片单：热门电影、最新电影、高分电影、热门剧集。",
   "author": "mi3s",
@@ -12,7 +12,7 @@ WidgetMetadata = {
       "title": "静态样片（不联网）",
       "functionName": "sample",
       "description": "完全不走网络，写死 6 部电影。用来区分是网络问题还是渲染问题。",
-      "cacheDuration": 1800,
+      "cacheDuration": 0,
       "requiresWebView": false,
       "params": [
         {
@@ -27,7 +27,7 @@ WidgetMetadata = {
       "title": "热门电影",
       "functionName": "popular",
       "description": "TMDB 热门电影，按热度倒序。",
-      "cacheDuration": 1800,
+      "cacheDuration": 0,
       "requiresWebView": false,
       "params": [
         {
@@ -48,7 +48,7 @@ WidgetMetadata = {
       "title": "最新电影",
       "functionName": "latest",
       "description": "TMDB 最新电影，按首次上映日期倒序。",
-      "cacheDuration": 1800,
+      "cacheDuration": 0,
       "requiresWebView": false,
       "params": [
         {
@@ -69,7 +69,7 @@ WidgetMetadata = {
       "title": "高分电影",
       "functionName": "topRated",
       "description": "TMDB 高分电影，按评分倒序，评价人数不少于 200。",
-      "cacheDuration": 1800,
+      "cacheDuration": 0,
       "requiresWebView": false,
       "params": [
         {
@@ -90,7 +90,7 @@ WidgetMetadata = {
       "title": "热门剧集",
       "functionName": "tvPopular",
       "description": "TMDB 热门剧集，按热度倒序。",
-      "cacheDuration": 1800,
+      "cacheDuration": 0,
       "requiresWebView": false,
       "params": [
         {
