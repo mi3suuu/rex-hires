@@ -99,6 +99,38 @@ WidgetMetadata = {
         { name: "userId", title: "用户 ID", type: "userId" },
       ],
     },
+    {
+      id: "official",
+      title: "官方TMDB同款",
+      functionName: "official",
+      cacheDuration: 3600,
+      params: [
+        {
+          name: "board",
+          title: "榜单",
+          type: "enumeration",
+          value: "popular",
+          enumOptions: [
+            { title: "备受欢迎", value: "popular" },
+            { title: "高分内容", value: "top_rated" },
+            { title: "正在热映", value: "now_playing" },
+            { title: "趋势本周", value: "trending" },
+          ],
+        },
+        {
+          name: "type",
+          title: "类型",
+          type: "enumeration",
+          value: "movie",
+          enumOptions: [
+            { title: "电影", value: "movie" },
+            { title: "剧集", value: "tv" },
+          ],
+        },
+        { name: "language", title: "语言", type: "language", value: "zh-CN" },
+        { name: "page", title: "页码", type: "page" },
+      ],
+    },
   ],
   search: {
     title: "搜片",
@@ -213,4 +245,71 @@ async function search(params) {
   var keyword = ((params && (params.keyword || params.query)) || "").trim();
   if (!keyword) throw new Error("请输入片名或描述");
   return await aiDiscover(keyword, params);
+}
+
+// ============================================================================
+// 官方 rex-tmdb 同款数据源分支：直接套用官方内嵌模块 rex-tmdb.js 的 fetchData 写法
+//   - Widget.tmdb.get(api, { params }) 直接取 TMDB 榜单（不是 Widget.http.post AI 后端）
+//   - 返回 response.results（不是 response.data.data）
+//   - 字段从 TMDB 原始 snake_case 映射：poster_path→posterPath / vote_average→rating /
+//     genre_ids→genreTitle（中文类型名）
+// ============================================================================
+
+// 官方 rex-tmdb 的 genreTitleWith 同款：genre_id → 中文类型名（取前 2 个，逗号分隔）
+var GENRE_DICT = [
+  [10759, "动作冒险"], [16, "动画"], [35, "喜剧"], [80, "犯罪"], [99, "纪录"],
+  [18, "剧情"], [10751, "家庭"], [10762, "儿童"], [9648, "悬疑"], [10763, "新闻"],
+  [10764, "真人秀"], [10765, "科幻"], [10766, "肥皂剧"], [10767, "脱口秀"], [10768, "战争"],
+  [37, "西部"], [28, "动作"], [12, "冒险"], [14, "奇幻"], [36, "历史"], [27, "恐怖"],
+  [10402, "音乐"], [10749, "爱情"], [878, "科幻"], [10770, "电视电影"], [53, "惊悚"], [10752, "战争"],
+];
+function genreTitleWith(genre_ids) {
+  if (!genre_ids || !genre_ids.length) return "";
+  var ids = genre_ids.length > 2 ? genre_ids.slice(0, 2) : genre_ids;
+  var names = [];
+  for (var i = 0; i < ids.length; i++) {
+    for (var j = 0; j < GENRE_DICT.length; j++) {
+      if (GENRE_DICT[j][0] == ids[i]) { names.push(GENRE_DICT[j][1]); break; }
+    }
+  }
+  return names.join(", ");
+}
+
+// 官方 rex-tmdb 同款：Widget.tmdb.get 取榜单，条目字段照抄官方 fetchData
+async function official(params) {
+  params = params || {};
+  var type = params.type === "tv" ? "tv" : "movie";
+  var board = params.board || "popular";
+  var language = params.language || "zh-CN";
+  var page = params.page || 1;
+  var api;
+  if (board === "trending") api = "trending/all/week";
+  else if (board === "now_playing") api = type === "tv" ? "tv/on_the_air" : "movie/now_playing";
+  else if (board === "top_rated") api = type === "tv" ? "tv/top_rated" : "movie/top_rated";
+  else api = type === "tv" ? "tv/popular" : "movie/popular";
+
+  var response = await Widget.tmdb.get(api, { params: { language: language, page: page } });
+  if (!response || !Array.isArray(response.results)) {
+    throw new Error("TMDB 返回异常");
+  }
+
+  var data = [];
+  for (var i = 0; i < response.results.length; i++) {
+    var item = response.results[i];
+    var mt = board === "trending" ? (item.media_type || (item.title ? "movie" : "tv")) : type;
+    if (mt !== "movie" && mt !== "tv") continue;
+    data.push({
+      id: item.id,
+      type: "tmdb",
+      title: item.title || item.name || "",
+      description: item.overview || "",
+      releaseDate: item.release_date || item.first_air_date || "",
+      backdropPath: item.backdrop_path || "",
+      posterPath: item.poster_path || "",
+      rating: item.vote_average || 0,
+      mediaType: mt,
+      genreTitle: genreTitleWith(item.genre_ids),
+    });
+  }
+  return data;
 }
