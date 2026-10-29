@@ -14,13 +14,12 @@
 //   （app.mi3s.hires 的 loadResource），由它去 28 个 CMS 源搜真实播放地址。
 //   即「首页 = TMDB 片库（展示），播放 = CMS 源（回源）」。
 //
-// 严格对齐官方类型（@rexnow/libs video.ts）+ 已验证可用的首页模块 RexHome 写法：
+// 严格对齐用户设备上【确实能正常显示】的官方「AI 搜索」模块（rex.nlsearch）：
 //   - modules[] 不写 type 字段（缺省即 video 类型）
-//   - function 返回 VideoItem[]：{id, type:"tmdb", title, posterPath, backdropPath,
-//     coverUrl, releaseDate, rating, mediaType, genreTitle, description}
-//   - 【关键 1】id 与 rating 必须是字符串（id: string / rating?: string）
-//   - 【关键 2】海报必须是【完整 https URL】。首页海报墙不会替第三方模块补图床前缀，
-//     给相对路径 /xxx.jpg 会导致整行空（官方 rex.tmdb 能给相对路径是客户端特判）
+//   - function 返回条目数组，字段与 AI 搜索后端完全一致：
+//     { id(数字), type:"tmdb", title, description, releaseDate,
+//       posterPath(相对路径), backdropPath(相对路径), mediaType, rating(数字),
+//       genreTitle(用 " / " 分隔) }
 //   - 只用 Widget.tmdb.get(api, {params})（Rex 运行时提供），无 fetch/定时器
 // ============================================================================
 
@@ -30,7 +29,7 @@ WidgetMetadata = {
   description: "首页片单走 TMDB 片库（最新更新 / 热播榜 / 电影·剧集·动漫·综艺·纪录片·短剧 / 二级题材），点进即调高清片源(stream)回 CMS 源解析播放地址",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "2.5.0",
+  version: "3.0.0",
   requiredVersion: "0.0.1",
   detailCacheDuration: 60,
   modules: [
@@ -136,7 +135,7 @@ function genreTitleOf(genreIds) {
     var n = GENRE_NAMES[String(genreIds[i])];
     if (n && names.indexOf(n) < 0) names.push(n);
   }
-  return names.slice(0, 3).join("/");
+  return names.slice(0, 3).join(" / ");
 }
 
 // 排序字段归一：movie 用 primary_release_date，tv 用 first_air_date
@@ -150,26 +149,21 @@ function applySortBy(params, type) {
   else if (params.sort_by === "release_date.asc") params.sort_by = dateField + ".asc";
 }
 
-// 把 TMDB 相对路径 /xxx.jpg 拼成完整 https 图床地址。
-// 为什么必须拼：首页「海报墙」行（fullWidthPoster）不会替你补图床前缀，
-// 只有官方 rex.tmdb 那种内置模块才享受客户端特判；第三方模块给相对路径 → 整行无图/空。
-// 参照 RexHome 的 rexHomeNativeImage()：poster 用 w500、backdrop/cover 用 w780。
-var IMG_BASE = "https://image.tmdb.org/t/p/";
-function imgUrl(path, size) {
-  if (!path || typeof path !== "string") return undefined;
-  if (/^https?:\/\//i.test(path)) return path;
-  return IMG_BASE + size + (path.charAt(0) === "/" ? path : "/" + path);
-}
-
 // 调 TMDB 接口并把 results 转成 type:"tmdb" 条目。
-// 权威契约 = 官方类型定义 @rexnow/libs video.ts + RexHome 的 rexHomeFinishItem()：
-//   - id: string（纯数字 "550"）
-//   - rating: string（"8.4"）
-//   - posterPath: 完整 https URL（w500）
-//   - backdropPath: 完整 https URL（w780）
-//   - coverUrl: 完整 https URL（兜底，横图位排在 backdrop 之后、竖图位最后）
-// 官方 rex.tmdb 明文里给相对路径、数字 id，是客户端对官方模块的特判兜底；
-// 第三方模块必须按上面这套回传，否则海报墙整行空白。
+// ★ 权威契约 = 用户设备上【确实能正常显示】的官方「AI 搜索」模块（rex.nlsearch）后端返回：
+//    实测 https://api.rexnow.tv/api/discovery/ai-search/search 返回一条如下：
+//    { "id": 1058424,                    // ← 数字（int），不是字符串！
+//      "type": "tmdb",
+//      "title": "希望",
+//      "description": "...",
+//      "releaseDate": "2026-07-15",
+//      "posterPath": "/cNdHFtoePvOp5nxqwWNg9BJLQ8g.jpg",   // ← TMDB 相对路径，不拼 URL！
+//      "backdropPath": "/qqHFLg90IUSoTmSMpKOOW5RyqN3.jpg",  // ← 相对路径
+//      "mediaType": "movie",
+//      "rating": 6.77,                    // ← 数字（float），不是字符串！
+//      "genreTitle": "科幻 / 悬疑 / 动作" }  // ← 题材用「空格+斜杠+空格」分隔
+//   之前被 @rexnow/libs 的 TS 类型声明（id:string/rating:string）误导，改成字符串反而更差；
+//   以真实后端返回为准：数字 id、数字 rating、相对路径海报、genreTitle 用 " / " 分隔。
 async function tmdbFetch(api, params, forceMediaType) {
   var response;
   try {
@@ -188,19 +182,16 @@ async function tmdbFetch(api, params, forceMediaType) {
       if (mediaType == null) mediaType = item.title ? "movie" : "tv";
     }
     if (mediaType !== "movie" && mediaType !== "tv") continue;
-    var poster = imgUrl(item.poster_path, "w500");
-    var backdrop = imgUrl(item.backdrop_path, "w780");
     out.push({
-      id: String(item.id),
+      id: item.id,
       type: "tmdb",
       title: item.title || item.name,
       description: item.overview,
       releaseDate: item.release_date || item.first_air_date,
-      posterPath: poster,
-      backdropPath: backdrop,
-      coverUrl: poster || backdrop,
-      rating: item.vote_average == null ? undefined : String(item.vote_average),
+      posterPath: item.poster_path,
+      backdropPath: item.backdrop_path,
       mediaType: mediaType,
+      rating: item.vote_average,
       genreTitle: genreTitleOf(item.genre_ids),
     });
   }

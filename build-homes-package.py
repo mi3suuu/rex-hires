@@ -22,7 +22,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JS_PATH = os.path.join(HERE, "home.js")
-CDN_URL = "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v2.5.0/home.js"
+CDN_URL = "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@v3.0.0/home.js"
 WIDGET_ID = "app.mi3s.homes"
 WIDGET_NAME = "高清片源聚合"
 STAMP = (2026, 10, 29, 0, 0, 0)
@@ -105,12 +105,8 @@ def main():
     script = open(JS_PATH, "rb").read()
     home = {"avatar": "avatar-8", "isIndependent": False, "title": "高清片源首页"}
 
-    # 1) CDN 版：依赖网络，模块按 version 自动更新
+    # CDN 版（不可变 tag URL，确定能拿到对应版本）
     write_package(os.path.join(HERE, "homes-package.rex"), build_layout(CDN_URL), home)
-
-    # 2) 内嵌版：脚本锁在包里，导入时装成本机模块（file:///home.js）
-    write_package(os.path.join(HERE, "homes-package-local.rex"),
-                  build_layout("file:///home.js"), home, script)
 
 
 if __name__ == "__main__":

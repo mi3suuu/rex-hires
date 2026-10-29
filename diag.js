@@ -1,52 +1,39 @@
-// 诊断模块 v1.2.0：A/B 对照「海报 URL 形式」，定位首页海报墙为何空白
-// 同一部片（Fight Club, tmdb 550）出两条：
-//   【A】完整 https 图床地址
-//   【B】TMDB 相对路径 /xxx.jpg
-// 谁出海报，就说明客户端认哪种写法。
+// 诊断模块 v2.0.0：复刻官方「AI 搜索」后端返回格式，验证 tmdb 条目能否渲染
+// 结论来源：用户设备上 AI 搜索（rex.nlsearch）能正常显示，
+// 其后端 https://api.rexnow.tv/api/discovery/ai-search/search 返回条目为：
+//   id=数字, type="tmdb", title, description, releaseDate,
+//   posterPath=相对路径, backdropPath=相对路径, mediaType, rating=数字,
+//   genreTitle="科幻 / 悬疑 / 动作"（空格+斜杠+空格）
 WidgetMetadata = {
   id: "app.mi3s.diag",
   title: "诊断",
-  version: "1.2.0",
+  version: "2.0.0",
   requiredVersion: "0.0.1",
-  description: "A/B 对照海报 URL 形式（完整 https vs 相对路径），排查首页海报墙空白",
+  description: "复刻 AI 搜索返回格式，验证 tmdb 条目渲染",
   author: "mi3s",
   modules: [
     { id: "diag", title: "诊断", functionName: "diag", cacheDuration: 0, params: [] },
   ],
 };
 
-var POSTER = "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg";
-var BACKDROP = "/rr7E0NoGKxvbkb89eR1GwfoYjpA.jpg";
-
 async function diag(params) {
   var out = [];
 
-  // A：完整 https（RexHome 的 rexHomeNativeImage 写法）
+  // 1. 硬编码：完全照抄 AI 搜索后端一条真实返回（Fight Club 的 tmdb id 用 550 替入）
   out.push({
-    id: String(550),
+    id: 550,
     type: "tmdb",
-    title: "【A】完整 https 海报（能出图=用这种）",
-    description: "posterPath = https://image.tmdb.org/t/p/w500" + POSTER,
-    posterPath: "https://image.tmdb.org/t/p/w500" + POSTER,
-    backdropPath: "https://image.tmdb.org/t/p/w780" + BACKDROP,
-    coverUrl: "https://image.tmdb.org/t/p/w500" + POSTER,
-    rating: String(8.4),
+    title: "【硬编码】Fight Club（看到海报=渲染链路通）",
+    description: "此条字段与 AI 搜索后端完全一致：数字 id、数字 rating、相对路径海报",
+    releaseDate: "1999-10-15",
+    posterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+    backdropPath: "/rr7E0NoGKxvbkb89eR1GwfoYjpA.jpg",
     mediaType: "movie",
+    rating: 8.4,
+    genreTitle: "剧情 / 惊悚",
   });
 
-  // B：相对路径（官方 rex.tmdb 明文写法）
-  out.push({
-    id: String(550),
-    type: "tmdb",
-    title: "【B】相对路径海报（能出图=相对路径也行）",
-    description: "posterPath = " + POSTER,
-    posterPath: POSTER,
-    backdropPath: BACKDROP,
-    rating: String(8.4),
-    mediaType: "movie",
-  });
-
-  // C：真实 TMDB 取数，按完整 https 回传
+  // 2. 真实 TMDB 取数，按 AI 搜索同样格式回传
   var info = "未执行";
   try {
     if (typeof Widget === "undefined" || !Widget.tmdb) {
@@ -60,19 +47,29 @@ async function diag(params) {
         var mt = it.media_type;
         if (mt == null) mt = it.title ? "movie" : "tv";
         if (mt !== "movie" && mt !== "tv") continue;
-        var p = it.poster_path ? "https://image.tmdb.org/t/p/w500" + it.poster_path : undefined;
-        var b = it.backdrop_path ? "https://image.tmdb.org/t/p/w780" + it.backdrop_path : undefined;
         out.push({
-          id: String(it.id),
+          id: it.id,
           type: "tmdb",
-          title: it.title || it.name || ("(无标题#" + i + ")"),
+          title: it.title || it.name,
           description: it.overview || "",
           releaseDate: it.release_date || it.first_air_date || "",
-          posterPath: p,
-          backdropPath: b,
-          coverUrl: p || b,
-          rating: it.vote_average == null ? undefined : String(it.vote_average),
+          posterPath: it.poster_path || "",
+          backdropPath: it.backdrop_path || "",
           mediaType: mt,
+          rating: it.vote_average,
+          genreTitle: (function (ids) {
+            var map = { "28": "动作", "12": "冒险", "16": "动画", "35": "喜剧", "80": "犯罪",
+              "99": "纪录", "18": "剧情", "10751": "合家欢", "14": "奇幻", "36": "历史",
+              "27": "恐怖", "10402": "音乐", "9648": "悬疑", "10749": "爱情", "878": "科幻",
+              "53": "惊悚", "10752": "战争", "37": "西部" };
+            if (!ids || !ids.length) return "";
+            var n = [];
+            for (var k = 0; k < ids.length; k++) {
+              var name = map[String(ids[k])];
+              if (name && n.indexOf(name) < 0) n.push(name);
+            }
+            return n.slice(0, 3).join(" / ");
+          })(it.genre_ids),
         });
       }
     }
@@ -80,17 +77,17 @@ async function diag(params) {
     info = "异常: " + (e && e.message ? e.message : e);
   }
 
-  // 头部放一条诊断说明（带图，确保它是可见的）
   out.unshift({
-    id: String(551),
+    id: 551,
     type: "tmdb",
     title: "【诊断】" + info,
-    description: "A=完整 https，B=相对路径；C 段是真实 TMDB 数据",
-    posterPath: "https://image.tmdb.org/t/p/w500" + POSTER,
-    backdropPath: "https://image.tmdb.org/t/p/w780" + BACKDROP,
-    coverUrl: "https://image.tmdb.org/t/p/w500" + POSTER,
-    rating: String(8.4),
+    description: "第 2 条是硬编码（数字 id+相对路径）；其余是真实 TMDB 数据，格式同 AI 搜索",
+    releaseDate: "1999-10-15",
+    posterPath: "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+    backdropPath: "/rr7E0NoGKxvbkb89eR1GwfoYjpA.jpg",
     mediaType: "movie",
+    rating: 8.4,
+    genreTitle: "剧情 / 惊悚",
   });
 
   return out;
