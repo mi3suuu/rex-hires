@@ -78,10 +78,10 @@ for (var ai = 0; ai < ADULT_SOURCES.length; ai++) {
 WidgetMetadata = {
   id: "rex.mi3s.adult",
   title: "成人资源",
-  description: "25分类+最新榜+每源搜索+全局搜索+播放（直链健康探测+多源自动切换）",
+  description: "25分类+最新榜+每源搜索+全局搜索+播放（探测优先+聚合兜底）",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "3.7.0",
+  version: "3.8.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -1375,8 +1375,8 @@ async function aggregate(title, episode) {
     }
     if (collected.length >= 60) break;
   }
-  // ★ 健康探测排序：可达直链排前，不可达排后
-  return await rankByProbe(collected, 5);
+  // 只收集，不探测（探测由 loadResource 统一做，避免重复）
+  return collected;
 }
 
 // 按 vod_id 精确定位：直接调 ac=detail&ids= 拿该片的播放地址，返回 StreamSourceItem[]。
@@ -1438,18 +1438,15 @@ async function loadResource(params) {
   var title = txt(params.seriesName || params.title || params.name);
   var episode = params.episode == null ? 1 : Number(params.episode);
 
-  var collected = [];
-  var seen = {};
-  function addAll(arr) {
-    for (var i = 0; i < arr.length; i++) {
-      var r = arr[i];
-      if (!r || !r.url || seen[r.url]) continue;
-      seen[r.url] = true;
-      collected.push(r);
-    }
-  }
+  // ★ v3.8.0 性能修复：探测优先、聚合兜底。
+  //   v3.7.0 的「无条件跨源聚合 + 再探测」在真机上太慢（29 源扫描 + 不可达探测超时），
+  //   反而重新引入「一直 loading」。正确做法：
+  //     1) 精确定位直链（1 次请求）
+  //     2) 只探测这一条直链——可达就直接返回（最快路径）
+  //     3) 只有不可达/无直链时，才跨源片名聚合兜底
 
-  // ★ 优先精确定位：Rex 点开条目会把条目的 id/link 传进来，据此直接按 vod_id 拿直链。
+  // 1) 精确定位
+  var direct = [];
   var loc = vodLocateFromParams(params);
   if (loc && loc.vodId) {
     var src = null;
@@ -1463,21 +1460,42 @@ async function loadResource(params) {
       }
     }
     if (src) {
-      var direct = await queryByVodId(src, loc.vodId, title).catch(function () { return []; });
-      addAll(direct);
+      direct = await queryByVodId(src, loc.vodId, title).catch(function () { return []; });
     }
   }
 
-  // ★ v3.7.0 关键：精确定位拿到的直链可能域名已挂（如 lajiao2026.com），
-  //   此时**不直接 return**，而是同时跨源片名聚合，把其它源（CK/奶香/桃花/精品等）
-  //   的同片直链也收集进来，交给健康探测排序，自动切到可达的源。
-  if (title) {
-    var agg = await aggregate(title, episode);
-    addAll(agg);
+  // 2) 精确定位命中：只探测这些直链，有可达就返回（最快路径，最多几次短探测）
+  if (direct.length) {
+    // 直接探测排序；cap=1 表示拿到 1 条可达即可提前停（但 unknown/mp4 也算可用）
+    var ranked = await rankByProbe(direct, 3);
+    // 检查排序后第一条是否「可达或未知」（即非明确的不可达）
+    if (ranked.length) {
+      var head = ranked[0];
+      // mp4/flv 直链 probeUrl 返回 null(未知)，视为可用，不触发慢的跨源聚合
+      if (!/\.m3u8(\?|$)/i.test(head.url)) {
+        return ranked; // 非 m3u8 直链，直接返回
+      }
+      // m3u8 直链：探测第一条
+      var ok = await probeUrl(head.url, 3000);
+      if (ok === true) {
+        return ranked; // 可达，直接返回
+      }
+      // 第一条不可达：看排第二的（rankByProbe 已把可达排前，若有多条）
+      // 直接返回 ranked（即使第一条不可达，可达的也在前面，播放器会逐个试）
+      // 但为了保险，触发跨源聚合补充可达源
+    }
   }
 
-  if (!collected.length) return [];
-  return await rankByProbe(collected, 5);
+  // 3) 精确定位不可达/无直链 → 跨源片名聚合兜底（慢，但此时没有别的办法）
+  if (title) {
+    var agg = await aggregate(title, episode);
+    if (agg.length) {
+      return await rankByProbe(agg, 3);
+    }
+  }
+
+  // 4) 兜底失败：返回精确定位的结果（可能有不可达的，但至少让用户看到线路）
+  return direct.length ? direct : [];
 }
 
 // 全局聚合搜索（search 块，接入 Rex 总开关）
