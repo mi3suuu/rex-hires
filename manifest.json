@@ -6,8 +6,8 @@
     {
       "id": "rex.mi3s.adult",
       "title": "成人资源",
-      "version": "3.3.0",
-      "description": "25 分类源（动态拉完整分类）+ 最新榜 + 30 源每源独立搜索 + 全局聚合搜索 + 直链播放。★ v3.3.0：列表/搜索解析出的多条直链全部保留为 childItems 多线路备选，单一直链超时(采集源域名不稳定)时可手动切换线路，解决\"点资源一直加载\"。",
+      "version": "3.4.0",
+      "description": "25 分类源（动态拉完整分类）+ 最新榜 + 30 源每源独立搜索 + 全局聚合搜索 + 直链播放。★ v3.4.0：列表改为仅拉一次 ac=list 秒开（修复之前每条例外调详情导致真机一直 Loading），点开条目走 loadDetail 解析 m3u8 直链 + 多线路 childItems 备选。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/adult.js"
     },

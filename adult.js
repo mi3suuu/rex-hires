@@ -81,7 +81,7 @@ WidgetMetadata = {
   description: "25分类+最新榜+每源搜索+全局搜索+播放（[直连]/[代理]标注）",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "3.3.0",
+  version: "3.4.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -1032,8 +1032,58 @@ async function enrichOne(src, it, srcName) {
   }
 }
 
-// 列表 + 受控并发详情预解析（借鉴红果 hg.js 已验证模式）：
-// 并发 4，成功填海报+直链(type=url)，失败降级 detail，绝不因某条卡整页。
+// 详情加载：type="detail" 条目点开时由 Rex 调用，传入条目 link（详情接口 URL）。
+// 调详情拿 vod_pic + vod_play_url，解析成 type="url" + videoUrl + 多线路 childItems。
+async function loadDetail(link) {
+  if (!link) return null;
+  try {
+    var det = unwrap(await httpGet(link));
+    var d0 = (det && det.list && det.list[0]) || det || {};
+    var origin = (String(link).match(/^(https?:\/\/[^\/]+)/) || [])[1] || "";
+    var pic = picOf(d0, origin);
+    var playUrl = d0.vod_play_url || "";
+    var playFrom = d0.vod_play_from || "";
+    var item = {
+      id: "adl-" + (d0.vod_id != null ? d0.vod_id : encodeURIComponent(link).slice(-16)),
+      type: "detail",
+      title: clean(d0.vod_name) || "未命名",
+      description: clean(d0.vod_remarks || d0.type_name || d0.vod_content || ""),
+      posterPath: pic,
+      coverUrl: pic,
+      mediaType: "tv",
+      genreTitle: clean(d0.type_name) || "",
+      link: link,
+    };
+    if (d0.vod_time) item.releaseDate = String(d0.vod_time);
+    if (d0.vod_score) item.rating = String(d0.vod_score);
+    var lines = parsePlayUrl(playUrl, playFrom);
+    if (lines.length) {
+      item.type = "url";
+      item.videoUrl = lines[0].url;
+      item.playerType = "app";
+      if (lines.length > 1) {
+        var kids = [];
+        for (var li = 1; li < lines.length; li++) {
+          kids.push({
+            id: "adl-" + d0.vod_id + "-l" + li,
+            type: "url",
+            title: lines[li].line + " · " + lines[li].label,
+            videoUrl: lines[li].url,
+            playerType: "app",
+          });
+        }
+        if (kids.length) item.childItems = kids;
+      }
+    }
+    return item;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 列表：仅拉 ac=list 一次，快速返回 detail 条目（不做详情预解析）。
+// ★ v3.4.0 关键修复：之前对每条做 ac=detail 预解析，真机网络下 20 条 = 20+ 次慢请求，
+//   导致列表一直 Loading。现改为点开条目时走 loadDetail 再解析直链，列表秒开。
 async function srcList(cat, params, genreId) {
   var src = sourceByCat(cat);
   if (!src) return [];
@@ -1049,20 +1099,15 @@ async function srcList(cat, params, genreId) {
   }
   if (!list.length) return [];
 
-  var out = new Array(list.length);
-  var idx = 0;
-  var conc = 4;
-  async function worker() {
-    while (idx < list.length) {
-      var i = idx++;
-      var it = list[i];
-      var enriched = await enrichOne(src, it, cat);
-      out[i] = enriched || baseItem(it, cat, src.url);
-    }
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    var it = list[i];
+    if (!it || it.vod_id == null) continue;
+    var item = baseItem(it, cat, src.url);
+    // 详情入口：link 指向详情接口，点开由 loadDetail 解析直链
+    item.link = buildUrl(src.url, { ac: "detail", ids: it.vod_id });
+    out.push(item);
   }
-  var workers = [];
-  for (var w = 0; w < conc; w++) workers.push(worker());
-  await Promise.all(workers);
   return out;
 }
 
