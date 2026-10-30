@@ -5,24 +5,24 @@
     {
       "id": "rex.mi3s.adult",
       "title": "成人资源",
-      "version": "1.0.1",
-      "description": "12 个公网直连成人 CMS 源并发聚合，只输出可直接播放的 m3u8/mp4 直链（已剔除只能打开网页的分享线路）。零本机中转。",
+      "version": "1.1.0",
+      "description": "42 个公网直连成人 CMS 源分批并发聚合，只输出可直接播放的 m3u8/mp4 直链（已剔除只能打开网页的分享线路）。零本机中转。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/adult.js"
     },
     {
       "id": "rex.mi3s.hongguo",
       "title": "红果短剧",
-      "version": "1.0.1",
-      "description": "直连红果短剧官网 SSR，保留全部三档片库（短剧/漫剧/AI短剧）与 40 个题材分类，另带按片名全库定位的播放源模块，输出 360p mp4 直链。零本机中转。",
+      "version": "1.1.0",
+      "description": "直连红果短剧官网 SSR，保留全部三档片库（短剧/漫剧/AI短剧）与 40 个题材分类。列表阶段受控并发预解析每部剧的 360p mp4 直链，点开即播（不再全库扫描卡 loading）。零本机中转。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/hg.js"
     },
     {
       "id": "rex.mi3s.kkdy",
       "title": "可可影视",
-      "version": "1.0.2",
-      "description": "直连可可影视 App 私有接口（HMAC-SHA1 签名 + AES-256-CBC 解密全部纯 JS 实现），保留全部 10 个分类（推荐/Netflix/短剧/电影/院线上新/剧集/韩剧/动漫/综艺纪录/伦理）与各频道全部类型·地区·年份·排序筛选，列表即解析播放直链。Netflix 为跨频道 category=NETFLIX 合并片单。零本机中转。",
+      "version": "1.0.3",
+      "description": "直连可可影视 App 私有接口（HMAC-SHA1 签名 + AES-256-CBC 解密全部纯 JS 实现），保留全部 10 个分类与各频道全部类型·地区·年份·排序筛选，列表即解析播放直链。解析失败自动降级为详情型（条目不再消失）。Netflix 为跨频道 category=NETFLIX 合并片单。零本机中转。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/kkdy.js"
     },

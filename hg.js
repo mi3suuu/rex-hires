@@ -47,7 +47,7 @@ WidgetMetadata = {
   description: "红果短剧官网直连：短剧 / 漫剧 / AI 短剧 全库分类 + 360p 直链播放",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.0.1",
+  version: "1.1.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -222,7 +222,8 @@ function hgMp4(vid) {
 function toVideoItem(it, catName) {
   var item = {
     id: "hg-" + it.id,
-    // detail：Rex 会打开详情页，再由 hgResource（stream）按片名定位并提供 mp4 直链
+    // 默认 detail：点开后由 loadResource（stream）按片名定位并提供 mp4 直链。
+    // 列表阶段预解析成功时会升级为 url + videoUrl（见 runCategory）。
     type: "detail",
     title: it.title,
     description: it.intro || ("红果 · " + catName),
@@ -241,6 +242,24 @@ function toVideoItem(it, catName) {
   return item;
 }
 
+// 单部预解析：取播放页 vid_list 首集，输出 mp4 直链。失败返回 null（保持 detail）。
+async function prefetchOne(it, catName) {
+  try {
+    var play = await hgPlayer(it.id);
+    if (!play || !play.episodes || !play.episodes.length) return null;
+    var item = toVideoItem(it, catName);
+    item.videoUrl = hgMp4(play.episodes[0]);
+    item.type = "url";
+    // 集数信息供详情展示
+    item.episodeCount = play.episodes.length || it.episodeCnt;
+    return item;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 受控并发预解析：每部剧只发 1 次请求（取首集），成功点开即播，失败降级 detail。
+// 并发 4、单部超时走 fetchText 的 15s，整体用 Promise.all 收敛，绝不因某部卡住整页。
 async function runCategory(key, params) {
   params = params || {};
   var cat = null;
@@ -251,8 +270,22 @@ async function runCategory(key, params) {
   var page = parseInt(params.page, 10) || 1;
   var genre = txt(params.genre);
   var res = await hgCategory(cat.slug, page, genre);
-  var out = [];
-  for (var j = 0; j < res.items.length; j++) out.push(toVideoItem(res.items[j], cat.name));
+  if (!res.items.length) return [];
+
+  var out = new Array(res.items.length);
+  var idx = 0;
+  var conc = 4;
+  async function worker() {
+    while (idx < res.items.length) {
+      var i2 = idx++;
+      var it = res.items[i2];
+      var pref = await prefetchOne(it, cat.name);
+      out[i2] = pref || toVideoItem(it, cat.name);
+    }
+  }
+  var workers = [];
+  for (var w = 0; w < conc; w++) workers.push(worker());
+  await Promise.all(workers);
   return out;
 }
 

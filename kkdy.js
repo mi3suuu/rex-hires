@@ -49,7 +49,7 @@ WidgetMetadata = {
   description: "可可影视 App 私有接口直连：10 个分类全保留，播放直链实时解析",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.0.2",
+  version: "1.0.3",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -643,16 +643,18 @@ async function runChannel(chs, params, opts) {
       }
       base.genreTitle = tags.slice(0, 3).join("/");
       base.description = it.bottomLabel || it.topRightLabel || "";
+      // 关键：type 先用 detail（无 videoUrl 的 url 型会被 Rex 直接丢弃 → 条目“消失”），
+      // 只有真正解析出直链才升为 url。这样限流/失败时卡片一定保留。
+      base.type = "detail";
       try {
         var det = await kkDetail(it.id);
         if (det) {
-          if (det.url) base.videoUrl = det.url;
+          if (det.url) { base.videoUrl = det.url; base.type = "url"; }
           if (det.cover) { base.posterPath = det.cover; base.coverUrl = det.cover; }
           if (det.intro) base.description = det.intro;
           if (det.sourceName) base.genreTitle = (base.genreTitle ? base.genreTitle + " · " : "") + det.sourceName;
-          if (!det.url) base.type = "detail";
         }
-      } catch (e) { /* 单条失败保持卡片 */ }
+      } catch (e) { /* 单条失败：保持 detail 型，卡片仍在 */ }
       out[i2] = base;
     }
   }
