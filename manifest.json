@@ -5,8 +5,8 @@
     {
       "id": "rex.mi3s.adult",
       "title": "成人资源",
-      "version": "1.1.0",
-      "description": "42 个公网直连成人 CMS 源分批并发聚合，只输出可直接播放的 m3u8/mp4 直链（已剔除只能打开网页的分享线路）。零本机中转。",
+      "version": "2.0.0",
+      "description": "42 源聚合四合一：分类浏览（小鸡38/滴滴28/麻豆20/madouse8 动态拉取）+ 最新榜 + 全局搜索（接入总开关）+ 直链播放。零本机中转。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/adult.js"
     },
