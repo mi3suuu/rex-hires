@@ -81,7 +81,7 @@ WidgetMetadata = {
   description: "25分类+最新榜+每源搜索+全局搜索+播放（[直连]/[代理]标注）",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "3.5.1",
+  version: "3.6.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -963,7 +963,7 @@ function classesToNav(classes, srcName) {
     }
     var item = {
       id: "cat-" + srcName + "-" + top.id,
-      type: "detail",
+      type: "url",
       title: top.title,
       description: subs.length ? "含 " + subs.length + " 个子分类" : srcName + "分类",
       mediaType: "tv",
@@ -976,17 +976,21 @@ function classesToNav(classes, srcName) {
 }
 
 // 基础条目（无详情时的降级形态，保证条目不消失）
+// ★ 关键修复：type 弃用 "detail"（官方只支持 url/douban/imdb/tmdb/forward）。
+//   条目 id 编码 "ad-<cat>-<vod_id>"，点开后 Rex 调 loadResource，凭 params.id 精确定位。
 function baseItem(it, srcName, srcUrl) {
   var cover = picOf(it, srcUrl);
   var item = {
     id: "ad-" + srcName + "-" + it.vod_id,
-    type: "detail",
+    type: "url",
     title: clean(it.vod_name) || "未命名",
     description: clean(it.vod_remarks || it.type_name || ""),
     posterPath: cover,
     coverUrl: cover,
     mediaType: "tv",
     genreTitle: clean(it.type_name) || srcName,
+    link: buildUrl(srcUrl, { ac: "detail", ids: it.vod_id }),
+    playerType: "app",
   };
   if (it.vod_time) item.releaseDate = String(it.vod_time);
   return item;
@@ -1032,7 +1036,7 @@ async function enrichOne(src, it, srcName) {
   }
 }
 
-// 详情加载：type="detail" 条目点开时由 Rex 调用，传入条目 link（详情接口 URL）。
+// 详情加载：Rex 详情页可能用条目的 link 调用此顶层函数（官方约定 loadDetail(link)）。
 // 调详情拿 vod_pic + vod_play_url，解析成 type="url" + videoUrl + 多线路 childItems。
 async function loadDetail(link) {
   if (!link) return null;
@@ -1045,7 +1049,7 @@ async function loadDetail(link) {
     var playFrom = d0.vod_play_from || "";
     var item = {
       id: "adl-" + (d0.vod_id != null ? d0.vod_id : encodeURIComponent(link).slice(-16)),
-      type: "detail",
+      type: "url",
       title: clean(d0.vod_name) || "未命名",
       description: clean(d0.vod_remarks || d0.type_name || d0.vod_content || ""),
       posterPath: pic,
@@ -1053,14 +1057,13 @@ async function loadDetail(link) {
       mediaType: "tv",
       genreTitle: clean(d0.type_name) || "",
       link: link,
+      playerType: "app",
     };
     if (d0.vod_time) item.releaseDate = String(d0.vod_time);
     if (d0.vod_score) item.rating = String(d0.vod_score);
     var lines = parsePlayUrl(playUrl, playFrom);
     if (lines.length) {
-      item.type = "url";
       item.videoUrl = lines[0].url;
-      item.playerType = "app";
       if (lines.length > 1) {
         var kids = [];
         for (var li = 1; li < lines.length; li++) {
@@ -1081,9 +1084,9 @@ async function loadDetail(link) {
   }
 }
 
-// 列表：仅拉 ac=list 一次，快速返回 detail 条目（不做详情预解析）。
+// 列表：仅拉 ac=list 一次，快速返回条目（不做详情预解析）。
 // ★ v3.4.0 关键修复：之前对每条做 ac=detail 预解析，真机网络下 20 条 = 20+ 次慢请求，
-//   导致列表一直 Loading。现改为点开条目时走 loadDetail 再解析直链，列表秒开。
+//   导致列表一直 Loading。现改为点开条目时由 Rex 调 loadResource(stream) 精确定位直链，列表秒开。
 async function srcList(cat, params, genreId) {
   var src = sourceByCat(cat);
   if (!src) return [];
@@ -1103,10 +1106,7 @@ async function srcList(cat, params, genreId) {
   for (var i = 0; i < list.length; i++) {
     var it = list[i];
     if (!it || it.vod_id == null) continue;
-    var item = baseItem(it, cat, src.url);
-    // 详情入口：link 指向详情接口，点开由 loadDetail 解析直链
-    item.link = buildUrl(src.url, { ac: "detail", ids: it.vod_id });
-    out.push(item);
+    out.push(baseItem(it, cat, src.url));
   }
   return out;
 }
@@ -1280,7 +1280,11 @@ async function queryOne(src, title, episode) {
       name: src.name + " · " + ln.line + " · " + ln.label,
       description: clean(target.vod_name) || title,
       url: ln.url,
-      customHeaders: { "User-Agent": UA, Referer: base },
+      customHeaders: {
+        "User-Agent": UA,
+        Referer: base,
+        "X-Forward-Skip-Redirect-Probe": "1",
+      },
       playerType: "app",
     });
   }
@@ -1311,10 +1315,87 @@ async function aggregate(title, episode) {
   return collected;
 }
 
+// 按 vod_id 精确定位：直接调 ac=detail&ids= 拿该片的播放地址，返回 StreamSourceItem[]。
+// 这是「点开条目」时最快的路径，避免片名模糊搜索命错片/超时。
+async function queryByVodId(src, vodId, title) {
+  try {
+    var det = unwrap(await httpGet(buildUrl(src.url, { ac: "detail", ids: vodId })));
+    var d0 = (det && det.list && det.list[0]) || {};
+    var playUrl = d0.vod_play_url || "";
+    var playFrom = d0.vod_play_from || "";
+    if (!playUrl) return [];
+    var lines = parsePlayUrl(playUrl, playFrom);
+    if (!lines.length) return [];
+    var out = [];
+    for (var m = 0; m < lines.length; m++) {
+      var ln = lines[m];
+      out.push({
+        name: src.name + " · " + ln.line + " · " + ln.label,
+        description: clean(d0.vod_name) || title || "",
+        url: ln.url,
+        customHeaders: {
+          "User-Agent": UA,
+          Referer: src.url,
+          "X-Forward-Skip-Redirect-Probe": "1",
+        },
+        playerType: "app",
+      });
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+// 从 params 里提取定位信息：优先 params.id（"ad-<cat>-<vod_id>"），其次 params.link（?ac=detail&ids=）。
+function vodLocateFromParams(params) {
+  if (!params) return null;
+  // 1) id 形如 "ad-s1-12345"（cat 可能含中文，如 "ad-白嫖资源-123"）
+  var id = txt(params.id);
+  var im = id.match(/^ad-(.+)-(\d+)$/);
+  if (im) return { cat: im[1], vodId: im[2] };
+  // 2) link 形如 "...?ac=detail&ids=12345"
+  var link = txt(params.link);
+  var lm = link.match(/[?&]ids=(\d+)/);
+  if (lm) {
+    var cm = link.match(/^(https?:\/\/[^\/]+)/);
+    var origin = cm ? cm[1] : "";
+    var cat = "";
+    for (var i = 0; i < ADULT_SOURCES.length; i++) {
+      if (ADULT_SOURCES[i].url.indexOf(origin) >= 0) { cat = ADULT_SOURCES[i].cat || ""; break; }
+    }
+    return { cat: cat, vodId: lm[1] };
+  }
+  return null;
+}
+
 async function loadResource(params) {
   params = params || {};
   var title = txt(params.seriesName || params.title || params.name);
   var episode = params.episode == null ? 1 : Number(params.episode);
+
+  // ★ 优先精确定位：Rex 点开条目会把条目的 id/link 传进来，据此直接按 vod_id 拿直链，
+  //   省去跨 29 源片名模糊搜索（那是「点进去一直 loading」的直接原因之一）。
+  var loc = vodLocateFromParams(params);
+  if (loc && loc.vodId) {
+    var src = null;
+    if (loc.cat) src = sourceByCat(loc.cat);
+    if (!src) {
+      // link 里带 origin 时已反查到 cat；否则从 link origin 反查
+      var linkOrigin = (txt(params.link).match(/^(https?:\/\/[^\/]+)/) || [])[1];
+      if (linkOrigin) {
+        for (var i = 0; i < ADULT_ACTIVE.length; i++) {
+          if (ADULT_ACTIVE[i].url.indexOf(linkOrigin) >= 0) { src = ADULT_ACTIVE[i]; break; }
+        }
+      }
+    }
+    if (src) {
+      var direct = await queryByVodId(src, loc.vodId, title);
+      if (direct && direct.length) return direct;
+    }
+    // 精确定位失败，回退片名聚合
+  }
+
   if (!title) return [];
   return await aggregate(title, episode);
 }
@@ -1371,13 +1452,15 @@ async function searchOne(src, kw) {
     var cover = picOf(it, base);
     var item = {
       id: "ads-" + (src.cat || "x") + "-" + it.vod_id,
-      type: "detail",
+      type: "url",
       title: clean(it.vod_name) || "未命名",
       description: clean(it.type_name || it.vod_remarks || src.name),
       posterPath: cover,
       coverUrl: cover,
       mediaType: "tv",
       genreTitle: src.name + (it.type_name ? " · " + clean(it.type_name) : ""),
+      link: buildUrl(base, { ac: "detail", ids: it.vod_id }),
+      playerType: "app",
     };
     // 搜索接口(ac=detail&wd=)多数直接带 vod_play_url，就地解析直链；无则降级 detail。
     var playUrl = it.vod_play_url || "";

@@ -47,7 +47,7 @@ WidgetMetadata = {
   description: "红果短剧官网直连：短剧 / 漫剧 / AI 短剧 全库分类 + 360p 直链播放",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.2.0",
+  version: "1.3.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -225,9 +225,10 @@ function hgMp4(vid) {
 function toVideoItem(it, catName) {
   var item = {
     id: "hg-" + it.id,
-    // 默认 detail：点开后由 loadResource（stream）按片名定位并提供 mp4 直链。
-    // 列表阶段预解析成功时会升级为 url + videoUrl（见 runCategory）。
-    type: "detail",
+    // ★ 关键修复：type 用 "url"（官方只支持 url/douban/imdb/tmdb/forward，没有 "detail"）。
+    //   列表阶段预解析成功后升级为 url + videoUrl（见 runCategory）；失败时保持 url 但
+    //   videoUrl 为空，点开后 Rex 会调 loadResource(stream)，凭 params.id 里的 seriesId 精确定位。
+    type: "url",
     title: it.title,
     description: it.intro || ("红果 · " + catName),
     posterPath: it.cover,
@@ -236,6 +237,7 @@ function toVideoItem(it, catName) {
     mediaType: "tv",
     genreTitle: catName + (it.tags.length ? " · " + it.tags.slice(0, 3).join("/") : ""),
     link: HG_BASE + "/player/" + it.id,
+    playerType: "app",
   };
   // 附带自有字段，供播放阶段使用
   item.seriesId = it.id;
@@ -379,16 +381,49 @@ async function scanForTitle(title) {
   return null;
 }
 
+// 从 params 里提取 seriesId：优先 params.id（"hg-<seriesId>"），其次 params.link（/player/<id>），
+// 再其次 params.seriesId（自定义字段，Rex 可能透传）。拿到 seriesId 就精确定位，不必全库扫描。
+function seriesIdFromParams(params) {
+  if (!params) return null;
+  // 1) id 形如 "hg-12345"
+  var id = txt(params.id);
+  if (/^hg-\d+$/.test(id)) return id.slice(3);
+  // 2) link 形如 ".../player/12345"
+  var link = txt(params.link);
+  var lm = link.match(/player\/(\d+)/);
+  if (lm) return lm[1];
+  // 3) 自定义 seriesId 字段
+  var sid = txt(params.seriesId);
+  if (/^\d+$/.test(sid)) return sid;
+  return null;
+}
+
 async function loadResource(params) {
   params = params || {};
   var title = txt(params.seriesName || params.title || params.name);
   var episode = params.episode == null ? 1 : Number(params.episode);
-  if (!title) return [];
 
-  var hit = await scanForTitle(title);
+  // ★ 优先精确定位：Rex 点开条目时会把条目的 id/link 传进来，据此直接拿到 seriesId，
+  //   省去全库扫描（扫描 40 页×3 分类极慢，超时就是「一直 loading」的直接原因之一）。
+  var hit = null;
+  var play = null;
+  var sid = seriesIdFromParams(params);
+  if (sid) {
+    try {
+      var play0 = await hgPlayer(sid);
+      if (play0 && play0.episodes && play0.episodes.length) {
+        hit = { seriesId: sid, name: play0.title || title || ("红果 #" + sid), from: "id" };
+        play = play0; // 复用已取到的播放数据，避免重复请求
+      }
+    } catch (e) { /* 精确定位失败，回退片名扫描 */ }
+  }
+  if (!hit && title) {
+    hit = await scanForTitle(title);
+  }
   if (!hit) return [];
-
-  var play = await hgPlayer(hit.seriesId);
+  if (!play) {
+    play = await hgPlayer(hit.seriesId);
+  }
   if (!play.episodes.length) return [];
 
   var want = parseInt(episode, 10) || 1;
@@ -413,7 +448,12 @@ async function loadResource(params) {
       name: "红果短剧 · 第" + (k + 1) + "集" + (k === idx ? "（当前集）" : ""),
       description: (play.title || hit.name) + " · 360p · 官网直链",
       url: url,
-      customHeaders: { "User-Agent": HG_UA, Referer: HG_BASE + "/" },
+      // ★ 关键：X-Forward-Skip-Redirect-Probe 跳过起播前重定向探测，避免 mp4 直链被探测消耗导致一直 loading
+      customHeaders: {
+        "User-Agent": HG_UA,
+        Referer: HG_BASE + "/",
+        "X-Forward-Skip-Redirect-Probe": "1",
+      },
       playerType: "app",
     });
   }
