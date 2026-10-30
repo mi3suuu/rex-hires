@@ -81,7 +81,7 @@ WidgetMetadata = {
   description: "25分类+最新榜+每源搜索+全局搜索+播放（[直连]/[代理]标注）",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "3.2.0",
+  version: "3.3.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -1005,12 +1005,26 @@ async function enrichOne(src, it, srcName) {
     var playFrom = d0.vod_play_from || it.vod_play_from || "";
     var item = baseItem(it, srcName, src.url);
     if (pic) { item.posterPath = pic; item.coverUrl = pic; }
-    // 解析首条可播放直链
+    // 解析全部可播放直链：主条目放首条，其余塞 childItems 作多线路备选
+    // （苹果CMS 采集源直链域名不稳定，单一直链超时会导致"一直加载"，多线路可手动切换）
     var lines = parsePlayUrl(playUrl, playFrom);
     if (lines.length) {
       item.type = "url";
       item.videoUrl = lines[0].url;
       item.playerType = "app";
+      if (lines.length > 1) {
+        var kids = [];
+        for (var li = 1; li < lines.length; li++) {
+          kids.push({
+            id: "ad-" + srcName + "-" + it.vod_id + "-l" + li,
+            type: "url",
+            title: lines[li].line + " · " + lines[li].label,
+            videoUrl: lines[li].url,
+            playerType: "app",
+          });
+        }
+        if (kids.length) item.childItems = kids;
+      }
     }
     return item;
   } catch (e) {
@@ -1335,6 +1349,19 @@ async function searchOne(src, kw) {
         item.type = "url";
         item.videoUrl = lines[0].url;
         item.playerType = "app";
+        if (lines.length > 1) {
+          var kids = [];
+          for (var li = 1; li < lines.length; li++) {
+            kids.push({
+              id: "ads-" + (src.cat || "x") + "-" + it.vod_id + "-l" + li,
+              type: "url",
+              title: lines[li].line + " · " + lines[li].label,
+              videoUrl: lines[li].url,
+              playerType: "app",
+            });
+          }
+          if (kids.length) item.childItems = kids;
+        }
       }
     }
     out.push(item);
