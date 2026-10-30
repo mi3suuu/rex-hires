@@ -78,10 +78,10 @@ for (var ai = 0; ai < ADULT_SOURCES.length; ai++) {
 WidgetMetadata = {
   id: "rex.mi3s.adult",
   title: "成人资源",
-  description: "25分类+最新榜+每源搜索+全局搜索+播放（[直连]/[代理]标注）",
+  description: "25分类+最新榜+每源搜索+全局搜索+播放（直链健康探测+多源自动切换）",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "3.6.0",
+  version: "3.7.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -1291,6 +1291,67 @@ async function queryOne(src, title, episode) {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// 直链健康探测（★ v3.7.0 核心修复）
+// ---------------------------------------------------------------------------
+// 背景：苹果CMS 采集源的播放直链域名（如 2609.lajiao2026.com / *.senlin2026.com 等
+//   「数字前缀+日期+泛域名」CDN）时通时断。实测 24 源里 11 个直链域名 TLS 握手卡死/403，
+//   11 个可达。用户点的那部片若恰好落在挂掉的源，直链解析出来但播放器拿 m3u8 起播就
+//   一直 loading（参照片 Apple 官方测试片证明播放器本身对 HLS 完全正常）。
+// 所以：起播前对候选 m3u8 直链做可达性探测，剔除/后置不可达的，只把可达的交给播放器。
+//
+// 探测方式：Widget.http.get 短超时（m3u8 是几 KB 的文本 playlist，代价小）。
+//   mp4/flv 直链不探测（会真的下载视频体），直接判为「未知」保留。
+// ---------------------------------------------------------------------------
+
+// 单个直链可达性探测：返回 true(可达) / false(不可达) / null(未知，跳过探测的格式)
+async function probeUrl(url, ms) {
+  if (!url) return null;
+  // 只对 m3u8（HLS playlist）探测；mp4/flv/mkv 直接下载体，探测代价太高 → 返回 null(未知)
+  if (!/\.m3u8(\?|$)/i.test(url)) return null;
+  try {
+    var resp = await Widget.http.get(url, {
+      headers: { "User-Agent": UA },
+      timeout: ms || 3000,
+    });
+    // 有响应即视为可达；data 为空字符串/404 也视为不可达
+    var d = resp && resp.data !== undefined ? resp.data : resp;
+    if (d == null) return false;
+    if (typeof d === "string" && !d.trim()) return false;
+    // m3u8 开头应是 #EXTM3U；但有些源返回重定向后的文本，只要非空且非错误页即可
+    var s = typeof d === "string" ? d : (d.body || "");
+    if (typeof s === "string" && /<html|<body|error|not found/i.test(s.slice(0, 200))) return false;
+    return true;
+  } catch (e) {
+    return false; // 超时/网络错误 → 不可达
+  }
+}
+
+// 对一批结果做并发可达性探测，返回排序后的列表：可达的在前，不可达的排后（不丢弃，
+// 万一设备网络环境不同仍可手动切换）。unknown(null) 的（mp4 直链）排中间。
+async function rankByProbe(results, cap) {
+  if (!results || !results.length) return results || [];
+  var CONC = 8;
+  var ok = [], unknown = [], bad = [];
+  // 分批并发探测，避免一次性 60 条全打出去
+  for (var b = 0; b < results.length; b += CONC) {
+    var slice = results.slice(b, b + CONC);
+    var flags = await Promise.all(slice.map(function (r) {
+      return probeUrl(r.url, 3000).catch(function () { return false; });
+    }));
+    for (var x = 0; x < slice.length; x++) {
+      var r = slice[x];
+      var f = flags[x];
+      if (f === true) ok.push(r);
+      else if (f === false) bad.push(r);
+      else unknown.push(r);
+    }
+    // 一旦拿到足够的可达直链就提前停，不用探测全部
+    if (ok.length >= (cap || 5)) break;
+  }
+  return ok.concat(unknown).concat(bad);
+}
+
 async function aggregate(title, episode) {
   var collected = [];
   var seen = {};
@@ -1308,11 +1369,14 @@ async function aggregate(title, episode) {
         if (seen[r.url]) continue;
         seen[r.url] = true;
         collected.push(r);
-        if (collected.length >= 60) return collected;
+        if (collected.length >= 60) break;
       }
+      if (collected.length >= 60) break;
     }
+    if (collected.length >= 60) break;
   }
-  return collected;
+  // ★ 健康探测排序：可达直链排前，不可达排后
+  return await rankByProbe(collected, 5);
 }
 
 // 按 vod_id 精确定位：直接调 ac=detail&ids= 拿该片的播放地址，返回 StreamSourceItem[]。
@@ -1374,14 +1438,23 @@ async function loadResource(params) {
   var title = txt(params.seriesName || params.title || params.name);
   var episode = params.episode == null ? 1 : Number(params.episode);
 
-  // ★ 优先精确定位：Rex 点开条目会把条目的 id/link 传进来，据此直接按 vod_id 拿直链，
-  //   省去跨 29 源片名模糊搜索（那是「点进去一直 loading」的直接原因之一）。
+  var collected = [];
+  var seen = {};
+  function addAll(arr) {
+    for (var i = 0; i < arr.length; i++) {
+      var r = arr[i];
+      if (!r || !r.url || seen[r.url]) continue;
+      seen[r.url] = true;
+      collected.push(r);
+    }
+  }
+
+  // ★ 优先精确定位：Rex 点开条目会把条目的 id/link 传进来，据此直接按 vod_id 拿直链。
   var loc = vodLocateFromParams(params);
   if (loc && loc.vodId) {
     var src = null;
     if (loc.cat) src = sourceByCat(loc.cat);
     if (!src) {
-      // link 里带 origin 时已反查到 cat；否则从 link origin 反查
       var linkOrigin = (txt(params.link).match(/^(https?:\/\/[^\/]+)/) || [])[1];
       if (linkOrigin) {
         for (var i = 0; i < ADULT_ACTIVE.length; i++) {
@@ -1390,14 +1463,21 @@ async function loadResource(params) {
       }
     }
     if (src) {
-      var direct = await queryByVodId(src, loc.vodId, title);
-      if (direct && direct.length) return direct;
+      var direct = await queryByVodId(src, loc.vodId, title).catch(function () { return []; });
+      addAll(direct);
     }
-    // 精确定位失败，回退片名聚合
   }
 
-  if (!title) return [];
-  return await aggregate(title, episode);
+  // ★ v3.7.0 关键：精确定位拿到的直链可能域名已挂（如 lajiao2026.com），
+  //   此时**不直接 return**，而是同时跨源片名聚合，把其它源（CK/奶香/桃花/精品等）
+  //   的同片直链也收集进来，交给健康探测排序，自动切到可达的源。
+  if (title) {
+    var agg = await aggregate(title, episode);
+    addAll(agg);
+  }
+
+  if (!collected.length) return [];
+  return await rankByProbe(collected, 5);
 }
 
 // 全局聚合搜索（search 块，接入 Rex 总开关）
