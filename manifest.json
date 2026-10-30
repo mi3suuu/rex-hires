@@ -27,6 +27,14 @@
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/kkdy.js"
     },
     {
+      "id": "rex.mi3s.portal",
+      "title": "平台推荐",
+      "version": "1.0.0",
+      "description": "爱奇艺/芒果TV/腾讯视频 官方推荐页（直连公网，可翻页）。爱奇艺5片种+芒果3片种+腾讯4片种。优酷因 mtop 需 md5 签名+set-cookie 无法在 Rex 内移植，已跳过。",
+      "author": "mi3s",
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/portal.js"
+    },
+    {
       "id": "rex.mi3s.homes",
       "title": "高清片源聚合",
       "version": "10.0.0",
