@@ -21,9 +21,9 @@
     },
     {
       "id": "rex.mi3s.kkdy",
-      "title": "可可影视",
+      "title": "可可影视（已失效）",
       "version": "1.0.3",
-      "description": "直连可可影视 App 私有接口（HMAC-SHA1 签名 + AES-256-CBC 解密全部纯 JS 实现），保留全部 10 个分类与各频道全部类型·地区·年份·排序筛选，列表即解析播放直链。解析失败自动降级为详情型（条目不再消失）。Netflix 为跨频道 category=NETFLIX 合并片单。零本机中转。",
+      "description": "⚠️ 已失效：可可 App 私有接口域名(vres/vcache)大面积下线，网页版(keke1.app 等)加了 cdndefend JS 反爬，Rex 环境无法绕过。请勿导入，等待重新逆向。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/kkdy.js"
     },
