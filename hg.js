@@ -47,7 +47,7 @@ WidgetMetadata = {
   description: "红果短剧官网直连：短剧 / 漫剧 / AI 短剧 全库分类 + 360p 直链播放",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.1.0",
+  version: "1.2.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -166,7 +166,10 @@ function extractStr(html, key) {
 // 分类页 → [{ id, title, cover, intro, episodeCnt, remarks, tags }]
 async function hgCategory(slug, page, sub) {
   var subPath = sub ? "/" + sub : "";
-  var url = HG_BASE + "/category/" + slug + subPath + "?page=" + (page || 1);
+  var url = HG_BASE + "/category/" + slug + subPath;
+  // 官网 page=1 会 301 重定向到无 page（默认首页），page>=2 才认 ?page=N。
+  // Rex 的 Widget.http 不保证跟随 301，故 page=1 时直接不带参数。
+  if (page && page > 1) url += "?page=" + page;
   var html = await fetchText(url);
   var raw = extractJsonArray(html, "recommendList") || [];
   var out = [];

@@ -1,20 +1,21 @@
 {
   "title": "Rex 播放源合集（video + stream）",
   "description": "高清播放源模块合集：首页聚合片单（video）+ 播放源解析（stream）。点进影片即出播放地址。全部走 jsDelivr CDN。★ video 模块 id 必须以 rex. 开头，否则列表永远空白。",
+  "icon": "https://assets.rexnow.tv/scripts/rex-icon.png",
   "widgets": [
     {
       "id": "rex.mi3s.adult",
       "title": "成人资源",
-      "version": "3.1.0",
-      "description": "25 分类源（动态拉完整分类）+ 最新榜 + 30 源每源独立搜索 + 全局聚合搜索（接入总开关）+ 直链播放，源名标注[直连]/[代理]。",
+      "version": "3.2.0",
+      "description": "25 分类源（动态拉完整分类）+ 最新榜 + 30 源每源独立搜索 + 全局聚合搜索 + 直链播放。★ v3.2.0 修复：列表阶段受控并发预解析详情，补齐海报(19源列表接口不带 vod_pic)+解析 m3u8 直链(type=url 点开即播)，搜索就地解析直链。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/adult.js"
     },
     {
       "id": "rex.mi3s.hongguo",
       "title": "红果短剧",
-      "version": "1.1.0",
-      "description": "直连红果短剧官网 SSR，保留全部三档片库（短剧/漫剧/AI短剧）与 40 个题材分类。列表阶段受控并发预解析每部剧的 360p mp4 直链，点开即播（不再全库扫描卡 loading）。零本机中转。",
+      "version": "1.2.0",
+      "description": "直连红果短剧官网 SSR，保留三档片库与题材分类，列表预解析 360p mp4 直链点开即播。★ v1.2.0 修复：page=1 不再拼 ?page=（官网会 301 重定向导致列表空白），page≥2 正常翻页。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/hg.js"
     },
@@ -64,7 +65,7 @@
       "version": "1.0.1",
       "description": "4KVM 电影、电视剧与动漫的 HLS 播放源",
       "author": "HYJ1817",
-      "url": "https://raw.githubusercontent.com/HYJ1817/fw-modules/main/widgets/4kvm-resource.js"
+      "url": "https://cdn.jsdelivr.net/gh/HYJ1817/fw-modules@main/widgets/4kvm-resource.js"
     },
     {
       "id": "hyj1817.maccms.resource",
@@ -72,7 +73,7 @@
       "version": "1.0.0",
       "description": "苹果CMS通用聚合播放源：多站可配、自动翻页、片名归一化匹配",
       "author": "HYJ1817",
-      "url": "https://raw.githubusercontent.com/HYJ1817/fw-modules/main/widgets/maccms-source.js"
+      "url": "https://cdn.jsdelivr.net/gh/HYJ1817/fw-modules@main/widgets/maccms-source.js"
     },
     {
       "id": "app.mi3s.k4sources",

@@ -81,7 +81,7 @@ WidgetMetadata = {
   description: "25分类+最新榜+每源搜索+全局搜索+播放（[直连]/[代理]标注）",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "3.1.0",
+  version: "3.2.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -975,41 +975,81 @@ function classesToNav(classes, srcName) {
   return out;
 }
 
-function listToItems(list, srcName, srcUrl) {
-  var out = [];
-  for (var i = 0; i < list.length; i++) {
-    var it = list[i];
-    if (!it || it.vod_id == null) continue;
-    var cover = picOf(it, srcUrl);
-    var item = {
-      id: "ad-" + srcName + "-" + it.vod_id,
-      type: "detail",
-      title: clean(it.vod_name) || "未命名",
-      description: clean(it.vod_remarks || it.type_name || ""),
-      posterPath: cover,
-      coverUrl: cover,
-      mediaType: "tv",
-      genreTitle: clean(it.type_name) || srcName,
-    };
-    if (it.vod_time) item.releaseDate = String(it.vod_time);
-    out.push(item);
-  }
-  return out;
+// 基础条目（无详情时的降级形态，保证条目不消失）
+function baseItem(it, srcName, srcUrl) {
+  var cover = picOf(it, srcUrl);
+  var item = {
+    id: "ad-" + srcName + "-" + it.vod_id,
+    type: "detail",
+    title: clean(it.vod_name) || "未命名",
+    description: clean(it.vod_remarks || it.type_name || ""),
+    posterPath: cover,
+    coverUrl: cover,
+    mediaType: "tv",
+    genreTitle: clean(it.type_name) || srcName,
+  };
+  if (it.vod_time) item.releaseDate = String(it.vod_time);
+  return item;
 }
 
+// 单条详情补全：列表接口普遍不带 vod_pic/vod_play_url，需逐个调 ac=detail&ids= 拿。
+// 成功返回 { item, videoUrl }，失败返回 null（由调用方降级为 baseItem）。
+async function enrichOne(src, it, srcName) {
+  if (!it || it.vod_id == null) return null;
+  try {
+    var det = unwrap(await httpGet(buildUrl(src.url, { ac: "detail", ids: it.vod_id })));
+    var d0 = (det && det.list && det.list[0]) || {};
+    // 详情带完整海报则覆盖；否则沿用列表自带
+    var pic = picOf(d0, src.url) || picOf(it, src.url);
+    var playUrl = d0.vod_play_url || it.vod_play_url || "";
+    var playFrom = d0.vod_play_from || it.vod_play_from || "";
+    var item = baseItem(it, srcName, src.url);
+    if (pic) { item.posterPath = pic; item.coverUrl = pic; }
+    // 解析首条可播放直链
+    var lines = parsePlayUrl(playUrl, playFrom);
+    if (lines.length) {
+      item.type = "url";
+      item.videoUrl = lines[0].url;
+      item.playerType = "app";
+    }
+    return item;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 列表 + 受控并发详情预解析（借鉴红果 hg.js 已验证模式）：
+// 并发 4，成功填海报+直链(type=url)，失败降级 detail，绝不因某条卡整页。
 async function srcList(cat, params, genreId) {
   var src = sourceByCat(cat);
   if (!src) return [];
   var query = { ac: "list" };
   if (genreId) query.t = genreId;
   query.pg = parseInt(params && params.page, 10) || 1;
+  var list;
   try {
     var d = unwrap(await httpGet(buildUrl(src.url, query)));
-    var list = (d && d.list) || [];
-    return listToItems(list, cat, src.url);
+    list = (d && d.list) || [];
   } catch (e) {
     return [];
   }
+  if (!list.length) return [];
+
+  var out = new Array(list.length);
+  var idx = 0;
+  var conc = 4;
+  async function worker() {
+    while (idx < list.length) {
+      var i = idx++;
+      var it = list[i];
+      var enriched = await enrichOne(src, it, cat);
+      out[i] = enriched || baseItem(it, cat, src.url);
+    }
+  }
+  var workers = [];
+  for (var w = 0; w < conc; w++) workers.push(worker());
+  await Promise.all(workers);
+  return out;
 }
 
 async function catEntry(cat, params) {
@@ -1276,7 +1316,7 @@ async function searchOne(src, kw) {
     var it = list[i];
     if (!it || it.vod_id == null) continue;
     var cover = picOf(it, base);
-    out.push({
+    var item = {
       id: "ads-" + (src.cat || "x") + "-" + it.vod_id,
       type: "detail",
       title: clean(it.vod_name) || "未命名",
@@ -1285,7 +1325,19 @@ async function searchOne(src, kw) {
       coverUrl: cover,
       mediaType: "tv",
       genreTitle: src.name + (it.type_name ? " · " + clean(it.type_name) : ""),
-    });
+    };
+    // 搜索接口(ac=detail&wd=)多数直接带 vod_play_url，就地解析直链；无则降级 detail。
+    var playUrl = it.vod_play_url || "";
+    var playFrom = it.vod_play_from || "";
+    if (playUrl) {
+      var lines = parsePlayUrl(playUrl, playFrom);
+      if (lines.length) {
+        item.type = "url";
+        item.videoUrl = lines[0].url;
+        item.playerType = "app";
+      }
+    }
+    out.push(item);
   }
   return out;
 }
