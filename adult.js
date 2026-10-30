@@ -2,22 +2,17 @@
 // Rex 模块 · 成人资源（rex.mi3s.adult）
 // ----------------------------------------------------------------------------
 // 全部为公网可直连的苹果CMS v10 源，不依赖任何本机中转。
-// 本次开启代理后重新全量探测（2026-10-30）：
-//   直连可达 29 源、仅代理可达 1 源（杏吧）、均不可达 12 源。
-//   25 个源能挖到完整分类目录（接口 ?ac=list 响应的 class 字段）。
+// 开代理后重新全量探测（2026-10-30）：直连可达 29、仅代理 1（杏吧）、不可达 12。
+//   25 个源能挖到完整分类（接口 ?ac=list 响应的 class 字段）。
 //
 // 能力：
-//   1) 分类浏览：25 个「有分类」的源各建一个 video 模块，源名标注 [直连]/[代理]，
-//      分类目录动态从 class 字段拉取（不硬编码），点分类拉片单。
-//   2) 最新榜：25 源各一个「最新」video 模块（ac=list 天然按时间倒序）。
-//   3) 搜索：search 块接入 Rex 全局搜索开关，跨全部源搜片名。
-//   4) 播放：stream 聚合播放源，分批并发解析直链。
+//   1) 分类浏览：25 源各一个 video 模块，源名标注 [直连]/[代理]，分类动态拉取。
+//   2) 最新榜：25 源各一个「最新」模块。
+//   3) 每源独立搜索：30 源各一个「搜索」模块（input 参数，搜单源）。
+//   4) 全局聚合搜索：search 块接入 Rex 总搜索开关，跨全部源搜片名。
+//   5) 播放：stream 聚合播放源，分批并发解析直链。
 //
-// 标注含义：
-//   [直连] = 无需代理即可访问；[代理] = 手机需挂代理(VPN/Clash)才能访问。
-//   5 个 json.php 型源（香奶儿/淫水机/白嫖/美少女/黄AV）是纯搜索型，无分类目录。
-//   12 个不可达源（AIvin/奥斯卡/幸资源/色南国/丝袜/优优/最色/大地/百万/细胞/香蕉/91精品）
-//   已排除出源表（连代理都连不上）。
+// 标注：[直连]=无需代理；[代理]=手机需挂 VPN/Clash。
 // ============================================================================
 
 var ADULT_SOURCES = [
@@ -46,11 +41,11 @@ var ADULT_SOURCES = [
   { name: "jkun资源", url: "https://jkunzyapi.com/api.php/provide/vod", mode: "直连", cat: "s23" },
   { name: "豆豆资源", url: "https://api.douapi.cc/api.php/provide/vod", mode: "直连", cat: "s24" },
   { name: "桃花资源", url: "https://thzy1.me/api.php/provide/vod", mode: "直连", cat: "s25" },
-  { name: "香奶儿资源", url: "https://www.gdlsp.com/api/json.php", mode: "直连" },
-  { name: "淫水机资源", url: "https://www.xrbsp.com/api/json.php", mode: "直连" },
-  { name: "白嫖资源", url: "https://www.kxgav.com/api/json.php", mode: "直连" },
-  { name: "美少女资源", url: "https://www.msnii.com/api/json.php", mode: "直连" },
-  { name: "黄AV资源", url: "https://www.pgxdy.com/api/json.php", mode: "直连" },
+  { name: "香奶儿资源", url: "https://www.gdlsp.com/api/json.php", mode: "直连", cat: "香奶儿资源" },
+  { name: "淫水机资源", url: "https://www.xrbsp.com/api/json.php", mode: "直连", cat: "淫水机资源" },
+  { name: "白嫖资源", url: "https://www.kxgav.com/api/json.php", mode: "直连", cat: "白嫖资源" },
+  { name: "美少女资源", url: "https://www.msnii.com/api/json.php", mode: "直连", cat: "美少女资源" },
+  { name: "黄AV资源", url: "https://www.pgxdy.com/api/json.php", mode: "直连", cat: "黄AV资源" },
   { name: "AIvin", url: "http://lbapiby.com/api.php/provide/vod", mode: "不可达" },
   { name: "奥斯卡", url: "https://aosikazy.com/api.php/provide/vod", mode: "不可达" },
   { name: "幸资源", url: "https://xzybb2.com/api.php/provide/vod", mode: "不可达" },
@@ -65,8 +60,8 @@ var ADULT_SOURCES = [
   { name: "91精品", url: "https://91jpzyw.com/api.php/provide/vod", mode: "不可达" },
 ];
 
-// 能挖到完整分类的源（cat 标记），各建分类浏览 + 最新榜模块
 var ADULT_CAT_KEYS = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15", "s16", "s17", "s18", "s19", "s20", "s21", "s22", "s23", "s24", "s25"];
+var ADULT_JSON_KEYS = ["香奶儿资源", "淫水机资源", "白嫖资源", "美少女资源", "黄AV资源"];
 
 function sourceByCat(cat) {
   for (var i = 0; i < ADULT_SOURCES.length; i++) {
@@ -75,8 +70,6 @@ function sourceByCat(cat) {
   return null;
 }
 
-// 活跃源（排除 mode:"不可达"）：聚合播放/搜索只遍历这些，避免无谓的 5s 超时等待。
-// 不可达源仍保留在 ADULT_SOURCES 里（若日后恢复可达，改 mode 即可重新启用）。
 var ADULT_ACTIVE = [];
 for (var ai = 0; ai < ADULT_SOURCES.length; ai++) {
   if (ADULT_SOURCES[ai].mode !== "不可达") ADULT_ACTIVE.push(ADULT_SOURCES[ai]);
@@ -85,10 +78,10 @@ for (var ai = 0; ai < ADULT_SOURCES.length; ai++) {
 WidgetMetadata = {
   id: "rex.mi3s.adult",
   title: "成人资源",
-  description: "25 分类源浏览 + 最新榜 + 全局搜索 + 直链播放（[直连]/[代理]已标注）",
+  description: "25分类+最新榜+每源搜索+全局搜索+播放（[直连]/[代理]标注）",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "3.0.0",
+  version: "3.1.0",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -542,10 +535,280 @@ WidgetMetadata = {
       params: [{ name: "page", title: "页码", type: "page", value: "1" }],
     },
     {
+      id: "adultSearchs1",
+      title: "辣椒资源 [直连] · 搜索",
+      functionName: "searchS1",
+      description: "在 辣椒资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 辣椒资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs2",
+      title: "森林资源 [直连] · 搜索",
+      functionName: "searchS2",
+      description: "在 森林资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 森林资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs3",
+      title: "XXAV [直连] · 搜索",
+      functionName: "searchS3",
+      description: "在 XXAV 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 XXAV 内搜索" }],
+    },
+    {
+      id: "adultSearchs4",
+      title: "番号资源 [直连] · 搜索",
+      functionName: "searchS4",
+      description: "在 番号资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 番号资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs5",
+      title: "麻豆资源 [直连] · 搜索",
+      functionName: "searchS5",
+      description: "在 麻豆资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 麻豆资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs6",
+      title: "madouse [直连] · 搜索",
+      functionName: "searchS6",
+      description: "在 madouse 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 madouse 内搜索" }],
+    },
+    {
+      id: "adultSearchs7",
+      title: "黄色仓库VIP [直连] · 搜索",
+      functionName: "searchS7",
+      description: "在 黄色仓库VIP 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 黄色仓库VIP 内搜索" }],
+    },
+    {
+      id: "adultSearchs8",
+      title: "CK资源 [直连] · 搜索",
+      functionName: "searchS8",
+      description: "在 CK资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 CK资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs9",
+      title: "大奶子 [直连] · 搜索",
+      functionName: "searchS9",
+      description: "在 大奶子 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 大奶子 内搜索" }],
+    },
+    {
+      id: "adultSearchs10",
+      title: "老色逼 [直连] · 搜索",
+      functionName: "searchS10",
+      description: "在 老色逼 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 老色逼 内搜索" }],
+    },
+    {
+      id: "adultSearchs11",
+      title: "155资源 [直连] · 搜索",
+      functionName: "searchS11",
+      description: "在 155资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 155资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs12",
+      title: "souavZY [直连] · 搜索",
+      functionName: "searchS12",
+      description: "在 souavZY 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 souavZY 内搜索" }],
+    },
+    {
+      id: "adultSearchs13",
+      title: "奶香资源 [直连] · 搜索",
+      functionName: "searchS13",
+      description: "在 奶香资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 奶香资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs14",
+      title: "小鸡资源 [直连] · 搜索",
+      functionName: "searchS14",
+      description: "在 小鸡资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 小鸡资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs15",
+      title: "杏吧资源 [代理] · 搜索",
+      functionName: "searchS15",
+      description: "在 杏吧资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 杏吧资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs16",
+      title: "滴滴资源 [直连] · 搜索",
+      functionName: "searchS16",
+      description: "在 滴滴资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 滴滴资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs17",
+      title: "玉兔资源 [直连] · 搜索",
+      functionName: "searchS17",
+      description: "在 玉兔资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 玉兔资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs18",
+      title: "精品资源 [直连] · 搜索",
+      functionName: "searchS18",
+      description: "在 精品资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 精品资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs19",
+      title: "色猫资源 [直连] · 搜索",
+      functionName: "searchS19",
+      description: "在 色猫资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 色猫资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs20",
+      title: "鲨鱼资源 [直连] · 搜索",
+      functionName: "searchS20",
+      description: "在 鲨鱼资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 鲨鱼资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs21",
+      title: "黄色仓库 [直连] · 搜索",
+      functionName: "searchS21",
+      description: "在 黄色仓库 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 黄色仓库 内搜索" }],
+    },
+    {
+      id: "adultSearchs22",
+      title: "乐播资源 [直连] · 搜索",
+      functionName: "searchS22",
+      description: "在 乐播资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 乐播资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs23",
+      title: "jkun资源 [直连] · 搜索",
+      functionName: "searchS23",
+      description: "在 jkun资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 jkun资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs24",
+      title: "豆豆资源 [直连] · 搜索",
+      functionName: "searchS24",
+      description: "在 豆豆资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 豆豆资源 内搜索" }],
+    },
+    {
+      id: "adultSearchs25",
+      title: "桃花资源 [直连] · 搜索",
+      functionName: "searchS25",
+      description: "在 桃花资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 桃花资源 内搜索" }],
+    },
+    {
+      id: "adultSearchJson_香奶儿资源",
+      title: "香奶儿资源 [直连] · 搜索",
+      functionName: "searchJson_香奶儿资源",
+      description: "在 香奶儿资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 香奶儿资源 内搜索" }],
+    },
+    {
+      id: "adultSearchJson_淫水机资源",
+      title: "淫水机资源 [直连] · 搜索",
+      functionName: "searchJson_淫水机资源",
+      description: "在 淫水机资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 淫水机资源 内搜索" }],
+    },
+    {
+      id: "adultSearchJson_白嫖资源",
+      title: "白嫖资源 [直连] · 搜索",
+      functionName: "searchJson_白嫖资源",
+      description: "在 白嫖资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 白嫖资源 内搜索" }],
+    },
+    {
+      id: "adultSearchJson_美少女资源",
+      title: "美少女资源 [直连] · 搜索",
+      functionName: "searchJson_美少女资源",
+      description: "在 美少女资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 美少女资源 内搜索" }],
+    },
+    {
+      id: "adultSearchJson_黄AV资源",
+      title: "黄AV资源 [直连] · 搜索",
+      functionName: "searchJson_黄AV资源",
+      description: "在 黄AV资源 内搜索片名",
+      cacheDuration: 0,
+      requiresWebView: false,
+      params: [{ name: "keyword", title: "片名", type: "input", description: "在 黄AV资源 内搜索" }],
+    },
+    {
       id: "loadResource",
       title: "成人资源 · 播放",
       functionName: "loadResource",
-      description: "全部源分批并发聚合，输出可直接播放的 m3u8/mp4 直链",
+      description: "全部源分批并发聚合，输出可播放 m3u8/mp4 直链",
       type: "stream",
       cacheDuration: 0,
       requiresWebView: false,
@@ -664,7 +927,7 @@ function picOf(it, base) {
 }
 
 // ---------------------------------------------------------------------------
-// 分类目录：拉 ac=list 响应的 class 字段 → [{id, title, pid}]
+// 分类目录
 // ---------------------------------------------------------------------------
 
 async function fetchClasses(src) {
@@ -765,56 +1028,96 @@ async function catEntry(cat, params) {
 
 async function newEntry(cat, params) { return await srcList(cat, params, ""); }
 
+// 单源搜索（每源独立搜索入口）：搜该源 → 可点击条目
+async function searchByCat(cat, params) {
+  var src = sourceByCat(cat);
+  if (!src) return [];
+  var kw = txt(params && (params.keyword || params.query || params.title));
+  if (!kw) return [];
+  var arr = await searchOne(src, kw);
+  return arr;
+}
+
 async function catS1(params) { return catEntry("s1", params); }
 async function newS1(params) { return newEntry("s1", params); }
+async function searchS1(params) { return searchByCat("s1", params); }
 async function catS2(params) { return catEntry("s2", params); }
 async function newS2(params) { return newEntry("s2", params); }
+async function searchS2(params) { return searchByCat("s2", params); }
 async function catS3(params) { return catEntry("s3", params); }
 async function newS3(params) { return newEntry("s3", params); }
+async function searchS3(params) { return searchByCat("s3", params); }
 async function catS4(params) { return catEntry("s4", params); }
 async function newS4(params) { return newEntry("s4", params); }
+async function searchS4(params) { return searchByCat("s4", params); }
 async function catS5(params) { return catEntry("s5", params); }
 async function newS5(params) { return newEntry("s5", params); }
+async function searchS5(params) { return searchByCat("s5", params); }
 async function catS6(params) { return catEntry("s6", params); }
 async function newS6(params) { return newEntry("s6", params); }
+async function searchS6(params) { return searchByCat("s6", params); }
 async function catS7(params) { return catEntry("s7", params); }
 async function newS7(params) { return newEntry("s7", params); }
+async function searchS7(params) { return searchByCat("s7", params); }
 async function catS8(params) { return catEntry("s8", params); }
 async function newS8(params) { return newEntry("s8", params); }
+async function searchS8(params) { return searchByCat("s8", params); }
 async function catS9(params) { return catEntry("s9", params); }
 async function newS9(params) { return newEntry("s9", params); }
+async function searchS9(params) { return searchByCat("s9", params); }
 async function catS10(params) { return catEntry("s10", params); }
 async function newS10(params) { return newEntry("s10", params); }
+async function searchS10(params) { return searchByCat("s10", params); }
 async function catS11(params) { return catEntry("s11", params); }
 async function newS11(params) { return newEntry("s11", params); }
+async function searchS11(params) { return searchByCat("s11", params); }
 async function catS12(params) { return catEntry("s12", params); }
 async function newS12(params) { return newEntry("s12", params); }
+async function searchS12(params) { return searchByCat("s12", params); }
 async function catS13(params) { return catEntry("s13", params); }
 async function newS13(params) { return newEntry("s13", params); }
+async function searchS13(params) { return searchByCat("s13", params); }
 async function catS14(params) { return catEntry("s14", params); }
 async function newS14(params) { return newEntry("s14", params); }
+async function searchS14(params) { return searchByCat("s14", params); }
 async function catS15(params) { return catEntry("s15", params); }
 async function newS15(params) { return newEntry("s15", params); }
+async function searchS15(params) { return searchByCat("s15", params); }
 async function catS16(params) { return catEntry("s16", params); }
 async function newS16(params) { return newEntry("s16", params); }
+async function searchS16(params) { return searchByCat("s16", params); }
 async function catS17(params) { return catEntry("s17", params); }
 async function newS17(params) { return newEntry("s17", params); }
+async function searchS17(params) { return searchByCat("s17", params); }
 async function catS18(params) { return catEntry("s18", params); }
 async function newS18(params) { return newEntry("s18", params); }
+async function searchS18(params) { return searchByCat("s18", params); }
 async function catS19(params) { return catEntry("s19", params); }
 async function newS19(params) { return newEntry("s19", params); }
+async function searchS19(params) { return searchByCat("s19", params); }
 async function catS20(params) { return catEntry("s20", params); }
 async function newS20(params) { return newEntry("s20", params); }
+async function searchS20(params) { return searchByCat("s20", params); }
 async function catS21(params) { return catEntry("s21", params); }
 async function newS21(params) { return newEntry("s21", params); }
+async function searchS21(params) { return searchByCat("s21", params); }
 async function catS22(params) { return catEntry("s22", params); }
 async function newS22(params) { return newEntry("s22", params); }
+async function searchS22(params) { return searchByCat("s22", params); }
 async function catS23(params) { return catEntry("s23", params); }
 async function newS23(params) { return newEntry("s23", params); }
+async function searchS23(params) { return searchByCat("s23", params); }
 async function catS24(params) { return catEntry("s24", params); }
 async function newS24(params) { return newEntry("s24", params); }
+async function searchS24(params) { return searchByCat("s24", params); }
 async function catS25(params) { return catEntry("s25", params); }
 async function newS25(params) { return newEntry("s25", params); }
+async function searchS25(params) { return searchByCat("s25", params); }
+async function searchJson_香奶儿资源(params) { return searchByCat("香奶儿资源", params); }
+async function searchJson_淫水机资源(params) { return searchByCat("淫水机资源", params); }
+async function searchJson_白嫖资源(params) { return searchByCat("白嫖资源", params); }
+async function searchJson_美少女资源(params) { return searchByCat("美少女资源", params); }
+async function searchJson_黄AV资源(params) { return searchByCat("黄AV资源", params); }
 
 // ---------------------------------------------------------------------------
 // 单源：搜索 → 详情 → 解析线路
@@ -923,6 +1226,7 @@ async function loadResource(params) {
   return await aggregate(title, episode);
 }
 
+// 全局聚合搜索（search 块，接入 Rex 总开关）
 async function search(params) {
   params = params || {};
   var kw = txt(params.keyword || params.query || params.title);

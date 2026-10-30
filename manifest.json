@@ -5,8 +5,8 @@
     {
       "id": "rex.mi3s.adult",
       "title": "成人资源",
-      "version": "3.0.0",
-      "description": "开代理重新全量探测：25 个分类源（各自动态拉取完整分类目录，源名标注[直连]/[代理]）+ 25 个最新榜 + 全局搜索（接入总开关）+ 直链播放。",
+      "version": "3.1.0",
+      "description": "25 分类源（动态拉完整分类）+ 最新榜 + 30 源每源独立搜索 + 全局聚合搜索（接入总开关）+ 直链播放，源名标注[直连]/[代理]。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/adult.js"
     },
