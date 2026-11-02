@@ -1,34 +1,38 @@
 // ============================================================================
-// Rex 模块 · 怪兽聚合（avbox）加密站聚合（rex.mi3s.gs）
+// Rex 模块 · 怪兽聚合加密站（rex.mi3s.gs）— 每站独立入口版
 // ----------------------------------------------------------------------------
-// 把 avbox「怪兽聚合」APK 里的 pwa-aes 加密站批量接入 Rex，纯无中转。
-// 协议来自 LibreTV 的 gs-gateway.ts（libapp.so 反编译确证）：
+// 把 avbox「怪兽聚合」里实测可用的 pwa-aes 加密站接入 Rex，纯无中转。
 //
-//   明文 = 7 身份字段（token/via/language/version/oauth_type/bundleId/oauth_id）
-//          或 system_* 前缀身份字段（dh50/ttt）+ 业务参数
-//   加密 = AES-128-CBC/PKCS7（果冻系，data=base64）
-//          或 AES-256-CFB-128（dh50/ttt/lxs/dsp91，data=hex/base16）
-//   投递 = POST + application/x-www-form-urlencoded，字段 client/timestamp/data/sign
+// ★ 实测结论（2026-11-02，逐站探测 19 个候选站）：
+//   真正可用的只有 3 站，其余 16 站 API 域名已失效：
+//     - gdcm 果冻传媒  列表✅ 搜索✅ 详情✅(preview_url 相对路径) 分类❌(接口已死)
+//     - dh50 50度灰    列表✅(带 source_240 完整直链) 分类✅(动态树) 搜索△
+//     - ttt  汤头条    列表✅(source_240/480/720/1080)  分类✅(动态树) 搜索△
+//
+// 设计原则（响应「每个站点/分类都要分开，避免一次性全加载卡顿」）：
+//   1) 每站一个独立 video 模块（静态声明，独立 functionName），点哪个站才请求哪个站。
+//   2) 站内分类：dh50/ttt 有动态分类树（api/tab/listv1），点进站先返回分类列表
+//      （用 genreItems 子条目呈现），点具体分类才拉该分类片单。
+//   3) 每个资源独立计算：列表阶段只取 id/title/封面/时长，不预解析播放地址；
+//      点开某条才由 loadResource(stream) 调详情/取直链。
+//   4) dh50/ttt 列表条目已带 source_240 完整直链 → 直接塞 videoUrl，点开秒播。
+//
+// 协议（libapp.so 反编译 + LibreTV gs-gateway.ts 确证）：
+//   明文 = 身份字段（果冻系 oauth_*，dh50/ttt system_*）+ 业务参数
+//   加密 = AES-128-CBC/PKCS7（果冻系，data=base64）/ AES-256-CFB-128（dh50/ttt，data=hex）
 //   签名 = md5( hex(sha256("client=pwa&data=<data>&timestamp=<秒>" + salt)) )
-//   响应 = {"errcode":0,"data":"<AES密文>"}，用同 key/iv 解密得到 JSON
+//   响应 = {errcode:0, data:"<密文>"}，dh50/ttt 的 data 是「JSON 字符串字面量」需多重 parse
 //
-// 站点协议分三类：
-//   1) 果冻系（gdcm/zpc91/cg51/cgw/fl2/hgsp/hsxs/hu4/hxsp/ll51/one/ttav/txvlog/
-//      yxfm/zlt）：CBC + oauth_* 身份 + method 协议（mv/list_construct 等）
-//   2) tab 系（dh50/ttt）：CFB + system_* 身份 + MvList/featured + tabId
-//   3) dsp91（91短视频）：CFB + mod/code 协议（index/listByTag 等）
-//
-// 环境：只用 Rex 运行时的 Widget.http.get/post。无 fetch/crypto/setTimeout，
-//   AES/MD5/SHA256/Base64/UTF-8 全部内联纯 JS。
+// 环境：只用 Rex 的 Widget.http.post。无 fetch/crypto，AES/MD5/SHA256/Base64/UTF8 全内联。
 // ============================================================================
 
 WidgetMetadata = {
   id: "rex.mi3s.gs",
   title: "怪兽聚合·加密站",
-  description: "avbox 怪兽聚合加密站批量直连（果冻/91制片厂/50度灰/汤头条/吃瓜/短视频等 21 站），pwa-aes 本地解密，纯无中转",
+  description: "avbox 怪兽聚合实测可用加密站（果冻传媒/50度灰/汤头条），每站独立入口+站内分类，pwa-aes 本地解密纯无中转",
   author: "mi3s",
   site: "https://github.com/mi3s",
-  version: "1.0.0",
+  version: "2.0.0",
   requiredVersion: "0.0.1",
   search: {
     title: "搜索加密站",
@@ -37,26 +41,34 @@ WidgetMetadata = {
   },
   modules: [
     {
-      id: "gs-list",
-      title: "最新片单（全站）",
-      description: "聚合全部加密站最新上架，分页浏览",
+      id: "gs-gdcm",
+      title: "果冻传媒",
+      description: "果冻传媒最新片单 + 搜索（分类接口已失效）",
       requiresWebView: false,
       cacheDuration: 120,
-      functionName: "loadList",
+      functionName: "gdcmList",
       type: "video",
-      params: [
-        { name: "kind", title: "类型", type: "constant", value: "new" },
-        { name: "page", title: "页码", type: "page" }
-      ]
+      params: [{ name: "page", title: "页码", type: "page" }]
     },
     {
-      id: "gs-search",
-      title: "搜索",
-      description: "按片名/番号跨全部加密站搜索",
+      id: "gs-dh50",
+      title: "50度灰",
+      description: "50度灰分类片单（点开选择分类）",
       requiresWebView: false,
-      cacheDuration: 60,
-      functionName: "searchVideos",
-      params: [{ name: "keyword", title: "关键词", type: "input", value: "" }]
+      cacheDuration: 120,
+      functionName: "dh50List",
+      type: "video",
+      params: []
+    },
+    {
+      id: "gs-ttt",
+      title: "汤头条",
+      description: "汤头条分类片单（点开选择分类）",
+      requiresWebView: false,
+      cacheDuration: 120,
+      functionName: "tttList",
+      type: "video",
+      params: []
     },
     {
       id: "gs-resource",
@@ -75,127 +87,39 @@ WidgetMetadata = {
 };
 
 // ============================================================================
-// 站点配置（自 LibreTV data/gs-sites.json 导出，仅保留「有 key + 有 base」可直连站）
-//   mode: 'cbc' | 'cfb'   加密模式
-//   idp:  'oauth' | 'system' | 'mod'   身份字段方案
+// 站点配置（仅实测可用的 3 站）
+//   mode: 'cbc' | 'cfb'    idp: 'oauth' | 'system'
 // ============================================================================
 var SITES = [
-  // ---- 果冻系（CBC + oauth_* + method 协议）----
-  { key: "gdcm", name: "果冻传媒", mode: "cbc", idp: "oauth",
+  {
+    key: "gdcm", name: "果冻传媒", mode: "cbc", idp: "oauth",
     bases: ["https://api1.gdapi1.com/api.php/", "https://api2.gdapi2.com/api.php/", "https://api3.gdapi1.com/api.php/"],
     crypto: { key: "2acf7e91e9864673", iv: "1c29882d3ddfcfd6", salt: "5589d41f92a597d016b037ac37db243d", bundleId: "com.pwa.gdcm", oauthId: "fbc236d031e742c65e485f74dd9b3df9", version: "3.9.0" },
     methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "https://kfws.xeqyy.com", videoHosts: ["https://hf-120play.sxwph.com"] },
-
-  { key: "zpc91", name: "91制片厂", mode: "cbc", idp: "oauth",
-    bases: ["https://api2.piifvly.com/api.php/", "https://api2.zpcapiz2.com/api.php/", "https://api3.zpcapiz3.com/api.php/"],
-    crypto: { key: "2acf7e91e9864673", iv: "1c29882d3ddfcfd6", salt: "5589d41f92a597d016b037ac37db243d", bundleId: "com.pwa.zpcpj", oauthId: "7a84f1d768a7874f0c325fbbef92ba5c", version: "1.7.0" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "https://kfws.xeqyy.com", videoHosts: ["https://hf-120play.sxwph.com"] },
-
-  { key: "cg51", name: "51吃瓜", mode: "cbc", idp: "oauth",
-    bases: ["https://bpi3.uzapchtyr.com/api.php/api/", "https://bpi4.bjhmwjug.com/api.php/api/"],
-    crypto: { key: "2acf7e91e9864673", iv: "1c29882d3ddfcfd6", salt: "5589d41f92a597d016b037ac37db243d", bundleId: "com.pwa.cgqz", oauthId: "", version: "3.5.0" },
-    methods: { list: "contents/list_contents", search: "contents/search", detail: "contents/detail_content" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "cgw", name: "吃瓜网", mode: "cbc", idp: "oauth",
-    bases: ["https://apt1.pngufiwe.cc/"],
-    crypto: { key: "0efb2cd6a0be7456", iv: "418a9a9663d9befd", salt: "ec5c6a691215d4954de4419fad6fd6dc", bundleId: "com.pwa.sf07", oauthId: "11bf0051bfa412a744986887d3cf1594", version: "1.3.4" },
-    methods: { list: "contents/list_contents", search: "contents/search" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "fl2", name: "Fu2", mode: "cbc", idp: "oauth",
-    bases: ["https://api-al.ass6.store/", "https://api-al.tvmey.com/", "https://stream.ass6.store/", "https://stream-ani.bckbp.com/", "https://api-al.yuytyr.online/"],
-    crypto: { key: "3a0fd42302f0aada8abc0529a2bde5aa", iv: "3a0fd42302f0aada8abc0529a2bde5aa", salt: "3a0fd42302f0aada8abc0529a2bde5aa", bundleId: "", oauthId: "", version: "" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "hgsp", name: "黄瓜视频", mode: "cbc", idp: "oauth",
-    bases: ["https://hgapi-pnt017.soymfb.com"],
-    crypto: { key: "368480924a6c78e2e8681551a7cf4c21", iv: "368480924a6c78e2e8681551a7cf4c21", salt: "368480924a6c78e2e8681551a7cf4c21", bundleId: "", oauthId: "", version: "" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "hsxs", name: "好色先生", mode: "cbc", idp: "oauth",
-    bases: ["https://api2.kpsvvkl.cc/"],
-    crypto: { key: "tjJHooEeIYLszIUt", iv: "bleBrccsf7MZLG29", salt: "", bundleId: "com.hsxs.cc.org", oauthId: "cccf56a5cd127bd8fca7eb7a4bca5cf5", version: "2.2.2" },
-    methods: { list: "tabnew/list_construct", search: "search/mv", detail: "element/getElementById" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "hu4", name: "4虎", mode: "cbc", idp: "oauth",
-    bases: ["https://api2.kpsvvkl.cc/"],
-    crypto: { key: "22946bc50fd63164b79df55070a85a92", iv: "kaixin1234567890", salt: "", bundleId: "", oauthId: "", version: "" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "hxsp", name: "红杏视频", mode: "cbc", idp: "oauth",
-    bases: ["http://172.247.132.138/"],
-    crypto: { key: "W$S3skNwm3zkHXqd", iv: "ZV8^Vg!aSyk!uRNh", salt: "", bundleId: "", oauthId: "", version: "" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "ll51", name: "51萝莉", mode: "cbc", idp: "oauth",
-    bases: ["https://s704.ihrwtjf.com", "https://sapi01.gg-gv.com/api.php/", "https://sapi02.gg-gv.com/api.php/", "https://sapi03.gg-gv.com/api.php/"],
-    crypto: { key: "NQYT3eSsXG52WPDS", iv: "e89225cfbbimgkcu", salt: "", bundleId: "com.7du.cn.org", oauthId: "", version: "4.1.0" },
-    methods: { list: "navigation/list_short_mv", search: "search/mv" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "one", name: "全(One)", mode: "cbc", idp: "oauth",
-    bases: ["https://api.em1oifd0.com/", "https://api.61c76a0.com/", "https://api.j7y675.com/", "https://api.3459381.com/", "https://api.87735d5.com/", "https://api.c6dd5cc.com/"],
-    crypto: { key: "l*bv%Ziq000Biaog", iv: "8597506002939249", salt: "", bundleId: "", oauthId: "", version: "" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "ttav", name: "TTAV", mode: "cbc", idp: "oauth",
-    bases: ["https://d39jna88gmha0l.cloudfront.net"],
-    crypto: { key: "tJqkoiJXvD7UCU3i", iv: "h79lkicjeqwko5nd", salt: "", bundleId: "com.tiktok.cc.org", oauthId: "", version: "3.4.0" },
-    methods: { list: "tabnew/list_construct", search: "mv/search", detail: "element/getElementById" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "txvlog", name: "糖心Vlog", mode: "cbc", idp: "oauth",
-    bases: ["https://api.8ebe288ee10c0d45.com/", "https://api.32092345ec6c81f5.com/", "https://api.acaa0272469c5c16.com/", "https://api.ykkilavd.com/", "https://api.abzrzylk.com/", "https://api.wwscmafa.com/", "https://api.c1a82780f63b6c11.com/", "https://api.4d6fa906eaaf4a4f.com/", "https://api.2611e946dcb68187.com/", "https://api.9779edcc8ec4ee9c.com/"],
-    crypto: { key: "02c140afa946d427", iv: "02c140afa946d427", salt: "928547a24cbf62a315d8cf0f46d67a17", bundleId: "", oauthId: "928547a24cbf62a315d8cf0f46d67a17", version: "4.80.0" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "yxfm", name: "银杏FM", mode: "cbc", idp: "oauth",
-    bases: ["https://www.yuepmaa.space"],
-    crypto: { key: "Af234dfdf0io@#$*", iv: "1234567890123456", salt: "", bundleId: "com.bbs.radio.web", oauthId: "", version: "1.0.0" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "", videoHosts: [] },
-
-  { key: "zlt", name: "糟老头", mode: "cbc", idp: "oauth",
-    bases: ["https://missav.ws", "https://surrit.com/", "https://hgapi-pnt017.soymfb.com", "https://hgustp-bp-lk.jachsp.com"],
-    crypto: { key: "xPxo2S5uGPhKHx5g", iv: "0a1b2c3d4e5f6789", salt: "", bundleId: "", oauthId: "", version: "2.5.2" },
-    methods: { list: "v2/index_items", search: "video/search", detail: "v2/video/details/" },
-    imgHost: "", videoHosts: [] },
-
-  // ---- tab 系（CFB + system_* + MvList/featured）----
-  { key: "dh50", name: "50度灰", mode: "cfb", idp: "system",
+    imgHost: "https://kfws.xeqyy.com",
+    videoHosts: ["https://hf-120play.sxwph.com"],
+    hasCats: false
+  },
+  {
+    key: "dh50", name: "50度灰", mode: "cfb", idp: "system",
     bases: ["https://api3.boygzqzff.cc/pwa.php/", "https://api1.bmvjxkdfz.cc/pwa.php/", "https://api2.bngtckrhq.cc/pwa.php/"],
     crypto: { key: "7205a6c3883caf95b52db5b534e12ec3", iv: "81d7beac44a86f43", salt: "7205a6c3883caf95b52db5b534e12ec3", bundleId: "", oauthId: "a1B2c3D4e5F6g7H8", version: "6.3.3" },
-    methods: { list: "MvList/featured", tabList: "api/tab/listv1" },
-    imgHost: "", videoHosts: [], tabId: 12 },
-
-  { key: "ttt", name: "汤头条", mode: "cfb", idp: "system",
+    methods: { list: "MvList/featured", tabList: "api/tab/listv1", search: "MvSearch/video" },
+    imgHost: "",
+    videoHosts: [],
+    hasCats: true,
+    defaultTabId: 12
+  },
+  {
+    key: "ttt", name: "汤头条", mode: "cfb", idp: "system",
     bases: ["https://d39jna88gmha0l.cloudfront.net", "https://api3.rcbvmajq.cc/pwa.php/"],
     crypto: { key: "7205a6c3883caf95b52db5b534e12ec3", iv: "81d7beac44a86f43", salt: "7205a6c3883caf95b52db5b534e12ec3", bundleId: "", oauthId: "a1B2c3D4e5F6g7H8", version: "9.5.5" },
-    methods: { list: "MvList/featured", tabList: "api/tab/listv1" },
-    imgHost: "", videoHosts: [], tabId: 1 },
-
-  { key: "lxs", name: "撸先生", mode: "cfb", idp: "oauth",
-    bases: ["https://s704.ihrwtjf.com"],
-    crypto: { key: "f95277cfbbimgkcusimcuekd3b777pwa", iv: "f95277cfbbimgkcu", salt: "", bundleId: "com.tvlutv", oauthId: "", version: "2.4.2" },
-    methods: { list: "mv/list_construct", search: "mv/search", detail: "mv/getDetail" },
-    imgHost: "", videoHosts: [] },
-
-  // ---- dsp91（CFB + mod/code 协议）----
-  { key: "dsp91", name: "91短视频", mode: "cfb", idp: "mod",
-    bases: ["https://ujvxsl.nkbvfuvu.cc/"],
-    crypto: { key: "cc88ddc9357ff461e08f047aedee692b", iv: "e89225cfbbimgkcu", salt: "cc88ddc9357ff461e08f047aedee692b", bundleId: "", oauthId: "", version: "7.4.5" },
-    methods: { list: "index/listByTag", search: "index/search", detail: "element/getElementItembyId" },
-    imgHost: "", videoHosts: [] }
+    methods: { list: "MvList/featured", tabList: "api/tab/listv1", search: "MvSearch/video" },
+    imgHost: "",
+    videoHosts: [],
+    hasCats: true,
+    defaultTabId: 1
+  }
 ];
 
 var DEFAULT_UA = "okhttp/4.9.0";
@@ -348,7 +272,7 @@ function sha256Hex(str) {
   }
   return out;
 }
-// ---------- AES（支持 AES-128 与 AES-256，CBC + CFB-128）----------
+// ---------- AES（AES-128 与 AES-256，CBC + CFB-128）----------
 var AES = (function () {
   function xt(a) { return ((a << 1) ^ (a & 0x80 ? 0x1b : 0)) & 0xff; }
   function mul(a, b) { var r = 0; while (b) { if (b & 1) r ^= a; a = xt(a); b >>= 1; } return r & 0xff; }
@@ -362,7 +286,6 @@ var AES = (function () {
   }
   for (var i = 0; i < 256; i++) INV[SBOX[i]] = i;
 
-  // key: 16 字节 → AES-128 (Nk=4, Nr=10)；32 字节 → AES-256 (Nk=8, Nr=14)
   function expandKey(key) {
     var Nk = key.length / 4;
     var Nr = Nk + 6;
@@ -441,13 +364,6 @@ var AES = (function () {
     return st;
   }
 
-  function wordsToBytes(words) {
-    var out = [];
-    for (var i = 0; i < words.length; i++) out.push((words[i] >>> 24) & 255, (words[i] >>> 16) & 255, (words[i] >>> 8) & 255, words[i] & 255);
-    return out;
-  }
-
-  // CBC（AES-128/256，PKCS7 由调用方处理）
   function cbc(keyBytes, ivBytes, dataBytes, encrypt) {
     var ks = expandKey(keyBytes);
     var iv = [];
@@ -469,8 +385,6 @@ var AES = (function () {
     return out;
   }
 
-  // CFB-128：寄存器反馈。encrypt=true 加密（data=明文，寄存器喂密文=输出），
-  // encrypt=false 解密（data=密文，寄存器喂密文=输入）。
   function cfbX(keyBytes, ivBytes, dataBytes, encrypt) {
     var ks = expandKey(keyBytes);
     var reg = [];
@@ -484,7 +398,6 @@ var AES = (function () {
         block.push(dataBytes[off + i] ^ kb);
       }
       out = out.concat(block);
-      // 寄存器始终喂「密文块」：加密时=输出 block，解密时=输入 dataBytes
       var feed = encrypt ? block : dataBytes.slice(off, off + 16);
       for (var j = 0; j < 4; j++) {
         var b0 = feed[j * 4] || 0, b1 = feed[j * 4 + 1] || 0, b2 = feed[j * 4 + 2] || 0, b3 = feed[j * 4 + 3] || 0;
@@ -497,9 +410,7 @@ var AES = (function () {
   return { cbc: cbc, cfb: cfbX };
 })();
 
-function keyBytesOf(keyStr) {
-  return utf8Encode(keyStr);
-}
+function keyBytesOf(keyStr) { return utf8Encode(keyStr); }
 function ivBytesOf(ivStr) {
   var b = utf8Encode(ivStr);
   if (b.length > 16) b = b.slice(0, 16);
@@ -507,7 +418,6 @@ function ivBytesOf(ivStr) {
   return b;
 }
 
-// 加密：mode 'cbc' → base64，'cfb' → hex(base16)
 function encryptPayload(site, plainStr) {
   var c = site.crypto;
   var kb = keyBytesOf(c.key);
@@ -523,7 +433,6 @@ function encryptPayload(site, plainStr) {
   for (var p = 0; p < pad; p++) data.push(pad);
   return base64Encode(AES.cbc(kb, ib, data, true));
 }
-// 解密：mode 'cbc' → base64 输入，'cfb' → hex 输入
 function decryptPayload(site, encoded) {
   var c = site.crypto;
   var kb = keyBytesOf(c.key);
@@ -565,7 +474,7 @@ function jsonDecode(str) {
   try { return JSON.parse(s); } catch (e) { return null; }
 }
 
-// 递归解包：dh50/ttt 解密结果是「JSON 字符串」可能再套一层
+// 递归解包：dh50/ttt 解密结果是「JSON 字符串字面量」可能套多层（含引号包裹）
 function deepJsonParse(text) {
   var cur = text;
   for (var i = 0; i < 8; i++) {
@@ -590,7 +499,6 @@ function signFor(data, ts, salt) {
   return md5Hex(sha256Hex(s));
 }
 
-// 构造身份字段
 function buildIdentity(site, ts) {
   var c = site.crypto;
   if (site.idp === "system") {
@@ -620,17 +528,8 @@ function buildIdentity(site, ts) {
 async function pwaCall(site, method, params) {
   var c = site.crypto;
   var ts = String(Math.floor(Date.now() / 1000));
-
-  var plain;
-  if (site.idp === "mod") {
-    // dsp91：mod/code 进加密体，form 只带 4 字段
-    var parts = String(method).split("/");
-    plain = { oauth_type: "pwa", version: c.version || "1.0.0", timestamp: ts, oauth_id: c.oauthId || "", mod: parts[0], code: parts[1] || "", };
-    for (var k in params) if (Object.prototype.hasOwnProperty.call(params, k)) plain[k] = params[k];
-  } else {
-    plain = buildIdentity(site, ts);
-    for (var k2 in params) if (Object.prototype.hasOwnProperty.call(params, k2)) plain[k2] = params[k2];
-  }
+  var plain = buildIdentity(site, ts);
+  for (var k in params) if (Object.prototype.hasOwnProperty.call(params, k)) plain[k] = params[k];
 
   var data = encryptPayload(site, jsonEncode(plain));
   var sign = signFor(data, ts, c.salt || "");
@@ -644,16 +543,11 @@ async function pwaCall(site, method, params) {
   var errors = [];
   for (var i = 0; i < site.bases.length; i++) {
     var b = site.bases[i].replace(/\/+$/, "");
+    var m = String(method).replace(/^\/+/, "").replace(/^api\//, "");
     var url;
-    if (site.idp === "mod") {
-      // dsp91：POST 到 base + pwa.php
-      url = b + "/pwa.php";
-    } else {
-      var m = String(method).replace(/^\/+/, "").replace(/^api\//, "");
-      if (/\/(pwa|api)\.php\/api$/i.test(b)) url = b + "/" + m;
-      else if (/\/(pwa|api)\.php$/i.test(b)) url = b + "/api/" + m;
-      else url = b + "/api.php/api/" + m;
-    }
+    if (/\/(pwa|api)\.php\/api$/i.test(b)) url = b + "/" + m;
+    else if (/\/(pwa|api)\.php$/i.test(b)) url = b + "/api/" + m;
+    else url = b + "/api.php/api/" + m;
     try {
       var resp = await Widget.http.post(url, form, { headers: headers, timeout: 15000 });
       var body = resp && resp.data !== undefined ? resp.data : resp;
@@ -676,11 +570,10 @@ async function pwaCall(site, method, params) {
   throw new Error("加密站请求失败: " + errors.slice(0, 2).join(" | "));
 }
 
-// 递归取列表数组（容忍 data/list 包装）
+// 递归取列表数组（容忍 data/list 多重包装 + 字符串）
 function arrayOf(j) {
   if (Array.isArray(j)) return j;
   if (j && typeof j === "object") {
-    // dh50/ttt 的 data 可能是 JSON 字符串，先解
     if (typeof j.data === "string") { var d = deepJsonParse(j.data); if (d && typeof d === "object") j.data = d; }
     var cands = ["list", "videos", "mvs", "mv_list", "video_list", "items", "data", "content", "records", "rows"];
     for (var i = 0; i < cands.length; i++) {
@@ -695,7 +588,6 @@ function arrayOf(j) {
 // ============================================================================
 // ---------- 字段提取 ----------
 // ============================================================================
-// 封面字段可能是 JSON 字符串 {"ori":"...","360":"...","720":"..."}
 function resolveCover(it) {
   var raw = pick(it.cover_horizontal, it.cover_vertical, it.cover, it.cover_img, it.cover_thumb, it.cover_url, it.thumb, it.thumb_cover, it.thumb_cover_str, it.thumbnail, it.img_url, it.poster, it.vod_pic, it.img, it.pic);
   if (!raw) return "";
@@ -719,15 +611,16 @@ function titleOf(it) {
 function idOf(it) {
   return String(pick(it.id, it.video_id, it.mv_id, it.vod_id, it.aid, ""));
 }
-function linkOf(siteKey, id) { return "gs://" + siteKey + "/" + id; }
-function parseLink(raw) {
-  var s = String(raw || "");
-  // 两种形态：link="gs://<key>/<id>" 或 id="gs-<key>-<id>"
-  var m = s.match(/^gs:\/\/([^\/]+)\/(.+)$/);
-  if (m) return { site: m[1], id: decodeURIComponent(m[2]) };
-  var m2 = s.match(/^gs-([^-]+)-(.+)$/);
-  if (m2) return { site: m2[1], id: decodeURIComponent(m2[2]) };
-  return null;
+// 从列表项/详情里挖播放直链（dh50/ttt 是 source_240/480/720/1080；gdcm 是 preview_url 相对路径）
+function pickPlay(node) {
+  var direct = pick(node.source_1080, node.source_720, node.source_480, node.source_240, node.preview_url, node.play_url, node.playUrl, node.m3u8, node.video_url, node.url, node.preview_video);
+  if (direct) return String(direct);
+  var vs = node.video_sources;
+  if (vs && typeof vs === "object") {
+    var u = pick(vs.url_265, vs.url_264);
+    if (u) return String(u);
+  }
+  return "";
 }
 function durationText(sec) {
   var s = parseInt(sec, 10) || 0;
@@ -738,6 +631,8 @@ function durationText(sec) {
   var h = Math.floor(m / 60);
   return h + "小时" + (m % 60) + "分";
 }
+
+// 条目：type:'url'（成熟模式），dh50/ttt 列表已带完整直链则直接塞 videoUrl 秒播
 function itemOf(it, site) {
   var id = idOf(it);
   var title = titleOf(it);
@@ -746,15 +641,15 @@ function itemOf(it, site) {
   var bits = [site.name];
   var durStr = dsText(it.duration_str) || durationText(it.duration);
   if (durStr) bits.push(durStr);
-  if (it.actors) bits.push(clean(it.actors));
-  if (it.publisher) bits.push(clean(it.publisher));
+  if (it.tags && String(it.tags) !== "") bits.push(clean(it.tags));
   if (it.count_play) bits.push("播放 " + it.count_play);
-  return {
+
+  var item = {
     id: "gs-" + site.key + "-" + (id || title),
     type: "url",
     mediaType: "movie",
     title: title,
-    link: linkOf(site.key, id || title),
+    link: "gs://" + site.key + "/" + (id || title),
     description: bits.join(" · "),
     posterPath: cover,
     coverUrl: cover,
@@ -762,51 +657,119 @@ function itemOf(it, site) {
     imageUrl: cover,
     playerType: "app"
   };
-}
 
-// 从列表项/详情里挖播放直链（preview_url 相对路径 or 完整直链）
-function pickPlay(node) {
-  var direct = pick(node.preview_url, node.play_url, node.playUrl, node.source_240, node.url, node.m3u8, node.video_url, node.preview_video);
-  if (direct) return String(direct);
-  var vs = node.video_sources;
-  if (vs && typeof vs === "object") {
-    var u = pick(vs.url_265, vs.url_264);
-    if (u) return String(u);
+  // dh50/ttt：列表项直接带完整播放直链 → 塞 videoUrl，点开秒播
+  var play = pickPlay(it);
+  if (play && /^https?:\/\//i.test(play)) {
+    item.videoUrl = play;
   }
-  return "";
+  return item;
 }
 
 // ============================================================================
 // ---------- Rex 入口 ----------
 // ============================================================================
-// 列表：果冻系走 list 方法，dh50/ttt 走 MvList/featured+tabId，dsp91 走 index/listByTag
-async function loadList(params) {
+// 通用列表拉取：果冻系走 list 方法；dh50/ttt 走 MvList/featured + tabId
+async function fetchSiteList(site, tabId, page) {
+  if (site.idp === "system") {
+    return await pwaCall(site, site.methods.list, { tabId: tabId || site.defaultTabId || 1, page: page, size: 20 });
+  }
+  return await pwaCall(site, site.methods.list, { page: page, limit: 30, id: 1, sort: "new", _hash: 0 });
+}
+
+// 拉取 dh50/ttt 的动态分类树（api/tab/listv1），返回 [{id,name,api}]
+async function fetchTabs(site) {
+  try {
+    var j = await pwaCall(site, site.methods.tabList, {});
+    var arr = j;
+    if (j && typeof j === "object") {
+      if (typeof j.data === "string") { var d = deepJsonParse(j.data); if (d && typeof d === "object") j.data = d; }
+      arr = j.data || j;
+    }
+    if (!Array.isArray(arr)) return [];
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var t = arr[i];
+      if (!t || typeof t !== "object") continue;
+      var id = String(t.id || "");
+      var name = clean(t.name || "");
+      if (!name || id === "-1") continue; // -1 是固定入口（关注/推荐等），跳过
+      out.push({ id: id, name: name, api: t.api || "" });
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+// 果冻传媒：无分类树，直接最新列表
+async function gdcmList(params) {
   params = params || {};
   var page = Math.max(1, parseInt(params.page, 10) || 1);
-  var out = [];
-  for (var i = 0; i < SITES.length; i++) {
-    var site = SITES[i];
+  var site = siteByKey("gdcm");
+  if (!site) return [];
+  try {
+    var j = await fetchSiteList(site, 1, page);
+    var arr = arrayOf(j);
+    var out = [];
+    for (var k = 0; k < arr.length; k++) {
+      var it = itemOf(arr[k], site);
+      if (it) out.push(it);
+    }
+    return out;
+  } catch (e) {
+    return [];
+  }
+}
+
+// 50度灰 / 汤头条：先返回分类列表（子条目），点分类再拉该分类片单
+async function dh50List(params) { return tabSiteList("dh50", params); }
+async function tttList(params) { return tabSiteList("ttt", params); }
+
+async function tabSiteList(key, params) {
+  params = params || {};
+  var site = siteByKey(key);
+  if (!site) return [];
+
+  // 若带 tabId 参数（点进某个分类后），直接返回该分类片单
+  if (params.tabId) {
     try {
-      var j;
-      if (site.key === "dh50" || site.key === "ttt") {
-        j = await pwaCall(site, site.methods.list, { tabId: site.tabId || 1, page: page, size: 20 });
-      } else if (site.idp === "mod") {
-        j = await pwaCall(site, site.methods.list, { type: "new", page: page, tags: 10, limit: 20 });
-      } else {
-        j = await pwaCall(site, site.methods.list || "mv/list_construct", { page: page, limit: 30, id: 1, sort: "new", _hash: 0 });
-      }
+      var j = await fetchSiteList(site, Number(params.tabId), 1);
       var arr = arrayOf(j);
+      var out = [];
       for (var k = 0; k < arr.length; k++) {
         var it = itemOf(arr[k], site);
         if (it) out.push(it);
       }
+      return out;
     } catch (e) {
-      // 单站失败忽略
+      return [];
     }
+  }
+
+  // 否则返回分类列表：每个分类一个 type:'url' 条目
+  var tabs = await fetchTabs(site);
+  if (!tabs.length) {
+    // 分类树拉不到，退回默认 tab 的最新列表
+    return tabSiteList(key, { tabId: site.defaultTabId || 1 });
+  }
+  var out = [];
+  for (var i = 0; i < tabs.length; i++) {
+    var t = tabs[i];
+    out.push({
+      id: "gs-tab-" + key + "-" + t.id,
+      type: "url",
+      title: t.name,
+      description: site.name + " 分类",
+      mediaType: "tv",
+      genreTitle: site.name,
+      link: "gs://" + key + "/tab/" + t.id
+    });
   }
   return out;
 }
 
+// 搜索：果冻系 mv/search，dh50/ttt MvSearch/video
 async function searchVideos(params) {
   params = params || {};
   var keyword = clean(params.keyword || params.q || "");
@@ -817,13 +780,10 @@ async function searchVideos(params) {
     var site = SITES[i];
     try {
       var j;
-      if (site.key === "dh50" || site.key === "ttt") {
-        // dh50/ttt 搜索走 MvSearch/search
-        j = await pwaCall(site, "MvSearch/search", { page: page, size: 20, word: keyword });
-      } else if (site.idp === "mod") {
-        j = await pwaCall(site, site.methods.search, { type: 2, key: keyword, page: page });
+      if (site.idp === "system") {
+        j = await pwaCall(site, site.methods.search, { word: keyword, page: page, size: 20 });
       } else {
-        j = await pwaCall(site, site.methods.search || "mv/search", { page: page, limit: 36, type: 2, word: keyword });
+        j = await pwaCall(site, site.methods.search, { page: page, limit: 36, type: 2, word: keyword });
       }
       var arr = arrayOf(j);
       for (var k = 0; k < arr.length; k++) {
@@ -837,24 +797,41 @@ async function searchVideos(params) {
   return out;
 }
 
-// 播放解析：详情接口挖 preview_url / 完整直链，返回 VideoResource[]
+// 播放解析：点开条目后 Rex 调本函数（stream）。
+//   dh50/ttt：列表项已带 source_240 完整直链，若 params 里能拿到 videoUrl 直接用；
+//   否则调详情接口挖直链。gdcm：调 mv/getDetail 挖 preview_url（相对路径拼 videoHosts）。
 async function loadResource(params) {
   params = params || {};
   var raw = params.link || params.url || params.id || "";
-  var parsed = parseLink(raw);
-  if (!parsed) return [];
-  var site = siteByKey(parsed.site);
+
+  // 分类条目（gs://key/tab/xxx）不解析播放
+  if (/^gs:\/\/[^\/]+\/tab\//.test(String(raw))) return [];
+
+  var s = String(raw);
+  var m = s.match(/^gs:\/\/([^\/]+)\/(.+)$/) || s.match(/^gs-([^-]+)-(.+)$/);
+  if (!m) return [];
+  var site = siteByKey(m[1]);
   if (!site) return [];
+  var vid = decodeURIComponent(m[2]);
+
+  // 1) 若列表项已带完整直链（dh50/ttt），params 可能直接给了 videoUrl
+  if (params.videoUrl && /^https?:\/\//i.test(String(params.videoUrl))) {
+    return [{
+      name: "直链 · " + site.name,
+      description: site.name + " 加密站直连（本地解密）",
+      url: String(params.videoUrl),
+      playerType: "app"
+    }];
+  }
+
   try {
     var j;
-    if (site.idp === "mod") {
-      j = await pwaCall(site, site.methods.detail, { id: Number(parsed.id) || parsed.id });
-    } else if (site.key === "dh50" || site.key === "ttt") {
-      // dh50/ttt 详情
-      j = await pwaCall(site, "MvList/detail", { id: Number(parsed.id) || parsed.id });
-    } else {
-      j = await pwaCall(site, site.methods.detail || "mv/getDetail", { id: Number(parsed.id) || parsed.id });
+    if (site.idp === "system") {
+      // dh50/ttt 详情接口返回 502「Action not found」——它们列表已带完整直链，
+      // 正常情况下 loadResource 不会走到这（item 已带 videoUrl）
+      return [];
     }
+    j = await pwaCall(site, site.methods.detail, { id: Number(vid) || vid });
 
     // 定位详情节点
     var node = j;
@@ -874,7 +851,6 @@ async function loadResource(params) {
     }
 
     var pu = pickPlay(node);
-    // 有些站详情把播放藏在列表里
     if (!pu) {
       var arr = arrayOf(node);
       for (var ai = 0; ai < arr.length && !pu; ai++) pu = pickPlay(arr[ai]);
@@ -890,8 +866,8 @@ async function loadResource(params) {
         playerType: "app"
       });
     } else {
+      // 相对路径 → 拼视频域名池
       var hosts = site.videoHosts || [];
-      if (!hosts.length) return [];
       for (var h = 0; h < hosts.length; h++) {
         var u = hosts[h] + (String(pu).charAt(0) === "/" ? "" : "/") + pu;
         lines.push({

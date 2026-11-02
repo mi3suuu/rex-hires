@@ -86,8 +86,8 @@
     {
       "id": "rex.mi3s.gs",
       "title": "怪兽聚合·加密站",
-      "version": "1.0.0",
-      "description": "avbox 怪兽聚合加密站批量直连（果冻/91制片厂/50度灰/汤头条/吃瓜/短视频等 19 站），pwa-aes 本地解密，纯无中转。支持 CBC(AES-128) + CFB(AES-256) 两种加密、oauth_*/system_* 两种身份、mod/code 协议，列表+搜索+详情播放全链路。",
+      "version": "2.0.0",
+      "description": "avbox 怪兽聚合实测可用加密站（果冻传媒/50度灰/汤头条）。★ v2.0.0 每站独立入口+站内分类子条目（不再一次性聚合全站卡顿）：50度灰/汤头条点开选分类、列表直接带完整直链秒播；果冻传媒最新+搜索。逐站实测：19 候选站仅 3 站可用，其余 16 站 API 域名已失效。",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/gs.js"
     }
