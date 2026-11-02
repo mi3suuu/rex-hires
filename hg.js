@@ -47,7 +47,7 @@ WidgetMetadata = {
   description: "红果短剧官网直连：短剧 / 漫剧 / AI 短剧 全库分类 + 360p 直链播放",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.4.0-test",
+  version: "1.5.0-diag",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -400,6 +400,17 @@ function seriesIdFromParams(params) {
 
 async function loadResource(params) {
   params = params || {};
+  // ★ DIAG 版：先无条件吐一条参数快照 + 一条实测可播直链，用于看清 Rex 到底传了什么
+  try {
+    var dump = JSON.stringify(params);
+    return [{
+      name: "DIAG params",
+      description: dump.slice(0, 500),
+      url: "https://hongguoduanju.com/video/public/7701937936731737112/360p.mp4",
+      customHeaders: { "User-Agent": HG_UA, Referer: HG_BASE + "/" },
+      playerType: "app"
+    }];
+  } catch (e) { /* 继续走正常逻辑 */ }
   var title = txt(params.seriesName || params.title || params.name);
   var episode = params.episode == null ? 1 : Number(params.episode);
 
