@@ -47,7 +47,7 @@ WidgetMetadata = {
   description: "红果短剧官网直连：短剧 / 漫剧 / AI 短剧 全库分类 + 360p 直链播放",
   author: "mi3s",
   site: "https://github.com/mi3suuu/rex-hires",
-  version: "1.3.0",
+  version: "1.4.0-test",
   requiredVersion: "0.0.1",
   modules: [
     {
@@ -458,4 +458,53 @@ async function loadResource(params) {
     });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// 详情页：Rex 详情页用条目 link 调顶层 loadDetail(link)，返回带 videoUrl 的条目。
+// 红果网页端每剧只免费前 3 集（第 4 集起 /video/public/*/360p.mp4 返回 404），
+// 故 childItems 只放出实测可播的集；其余集仍可由 loadResource(stream) 兜底。
+// ---------------------------------------------------------------------------
+var HG_FREE_EPISODES = 3;
+
+async function loadDetail(link) {
+  var s = txt(link);
+  var sid = null;
+  var lm = s.match(/player\/(\d+)/);
+  if (lm) sid = lm[1];
+  if (!sid) sid = seriesIdFromParams({ link: s, id: s });
+  if (!sid) return null;
+
+  var play = null;
+  try { play = await hgPlayer(sid); } catch (e) { return null; }
+  if (!play || !play.episodes || !play.episodes.length) return null;
+
+  var cover = play.cover || "";
+  var item = {
+    id: "hg-" + sid,
+    type: "url",
+    title: play.title || ("红果 #" + sid),
+    description: play.intro || "",
+    posterPath: cover,
+    coverUrl: cover,
+    backdropPath: cover,
+    mediaType: "tv",
+    link: HG_BASE + "/player/" + sid,
+    playerType: "app",
+    videoUrl: hgMp4(play.episodes[0]),
+  };
+
+  var free = Math.min(HG_FREE_EPISODES, play.episodes.length);
+  var kids = [];
+  for (var i = 0; i < free; i++) {
+    kids.push({
+      id: "hg-" + sid + "-e" + (i + 1),
+      type: "url",
+      title: "第" + (i + 1) + "集",
+      videoUrl: hgMp4(play.episodes[i]),
+      playerType: "app",
+    });
+  }
+  if (kids.length) item.childItems = kids;
+  return item;
 }
