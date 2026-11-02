@@ -82,6 +82,14 @@
       "description": "100 个苹果CMS影视源多源聚合：优先4K/蓝光线路，含综合高清源与成人源，点进即出真实 m3u8 播放地址",
       "author": "mi3s",
       "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/4k-sources.js"
+    },
+    {
+      "id": "rex.mi3s.gs",
+      "title": "怪兽聚合·加密站",
+      "version": "1.0.0",
+      "description": "avbox 怪兽聚合加密站批量直连（果冻/91制片厂/50度灰/汤头条/吃瓜/短视频等 19 站），pwa-aes 本地解密，纯无中转。支持 CBC(AES-128) + CFB(AES-256) 两种加密、oauth_*/system_* 两种身份、mod/code 协议，列表+搜索+详情播放全链路。",
+      "author": "mi3s",
+      "url": "https://cdn.jsdelivr.net/gh/mi3suuu/rex-hires@main/gs.js"
     }
   ]
 }
